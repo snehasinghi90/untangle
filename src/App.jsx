@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 const NAV_ITEMS = [
@@ -47,6 +47,25 @@ const LESSONS = [
   },
 ]
 
+const PLACEHOLDER_ENTRIES = [
+  { date: 'June 17, 2026', text: "I said yes to covering a colleague's shift even though I was exhausted. I didn't want to disappoint her, but ended up feeling resentful the whole time." },
+  { date: 'June 16, 2026', text: "Tried to pause before responding when my manager asked me to take on another project. I almost said yes automatically — but I caught myself." },
+  { date: 'June 15, 2026', text: "Realized I've been apologizing for things that aren't my fault. Small thing, but interesting to notice." },
+]
+
+function load(key, fallback) {
+  try {
+    const v = localStorage.getItem(key)
+    return v !== null ? JSON.parse(v) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+}
+
 const CATEGORIES = [
   'People-pleasing',
   'Self-comparison',
@@ -57,19 +76,30 @@ const CATEGORIES = [
 
 function App() {
   const [problem, setProblem] = useState('')
-  const [screen, setScreen] = useState(1)
-  const [selected, setSelected] = useState(null)
-  const [butterflyName, setButterflyName] = useState('')
-  const [userName, setUserName] = useState('')
-  const [feeling, setFeeling] = useState(5)
+  const [screen, setScreen] = useState(() => load('utgl_screen', 1))
+  const [selected, setSelected] = useState(() => load('utgl_selected', null))
+  const [butterflyName, setButterflyName] = useState(() => load('utgl_butterflyName', ''))
+  const [userName, setUserName] = useState(() => load('utgl_userName', ''))
+  const [feeling, setFeeling] = useState(() => load('utgl_feeling', 5))
   const [navTab, setNavTab] = useState('home')
   const [showProfile, setShowProfile] = useState(false)
   const [journalDraft, setJournalDraft] = useState('')
-  const [journalEntries, setJournalEntries] = useState([
-    { date: 'June 17, 2026', text: 'I said yes to covering a colleague\'s shift even though I was exhausted. I didn\'t want to disappoint her, but ended up feeling resentful the whole time.' },
-    { date: 'June 16, 2026', text: 'Tried to pause before responding when my manager asked me to take on another project. I almost said yes automatically — but I caught myself.' },
-    { date: 'June 15, 2026', text: 'Realized I\'ve been apologizing for things that aren\'t my fault. Small thing, but interesting to notice.' },
-  ])
+  const [journalEntries, setJournalEntries] = useState(() => load('utgl_journalEntries', PLACEHOLDER_ENTRIES))
+  const [communityPosts, setCommunityPosts] = useState(() => load('utgl_communityPosts', [
+    { id: 1, name: 'Sarah', category: 'People-pleasing', text: "I said no to my mom and she got over it 💪 Thought it would be the end of the world. It wasn't.", likes: 14, liked: false },
+    { id: 2, name: 'Anonymous', category: 'Self-comparison', text: 'Deleted Instagram for a week. My anxiety actually went down noticeably. Might keep going.', likes: 22, liked: false },
+    { id: 3, name: 'Marcus', category: 'Perfectionism', text: "Submitted a work report that I knew wasn't perfect. The feedback was totally fine. I wasted so much energy stressing.", likes: 9, liked: false },
+    { id: 4, name: 'Priya', category: 'People-pleasing', text: 'Left a party early because I was tired instead of staying to make everyone happy. Felt guilty for like 10 mins, then great 😄', likes: 31, liked: false },
+    { id: 5, name: 'Anonymous', category: 'Time management', text: 'Blocked off Sunday mornings as non-negotiable me-time. Week 2 and I already feel more human.', likes: 17, liked: false },
+  ]))
+
+  useEffect(() => { save('utgl_screen', screen) }, [screen])
+  useEffect(() => { save('utgl_selected', selected) }, [selected])
+  useEffect(() => { save('utgl_butterflyName', butterflyName) }, [butterflyName])
+  useEffect(() => { save('utgl_userName', userName) }, [userName])
+  useEffect(() => { save('utgl_feeling', feeling) }, [feeling])
+  useEffect(() => { save('utgl_journalEntries', journalEntries) }, [journalEntries])
+  useEffect(() => { save('utgl_communityPosts', communityPosts) }, [communityPosts])
 
   const [toggles, setToggles] = useState({ reminder: true, community: true, darkMode: false })
   const flipToggle = key => setToggles(t => ({ ...t, [key]: !t[key] }))
@@ -84,13 +114,6 @@ function App() {
 
   const [showCompose, setShowCompose] = useState(false)
   const [composeDraft, setComposeDraft] = useState('')
-  const [communityPosts, setCommunityPosts] = useState([
-    { id: 1, name: 'Sarah', category: 'People-pleasing', text: "I said no to my mom and she got over it 💪 Thought it would be the end of the world. It wasn't.", likes: 14, liked: false },
-    { id: 2, name: 'Anonymous', category: 'Self-comparison', text: 'Deleted Instagram for a week. My anxiety actually went down noticeably. Might keep going.', likes: 22, liked: false },
-    { id: 3, name: 'Marcus', category: 'Perfectionism', text: 'Submitted a work report that I knew wasn\'t perfect. The feedback was totally fine. I wasted so much energy stressing.', likes: 9, liked: false },
-    { id: 4, name: 'Priya', category: 'People-pleasing', text: 'Left a party early because I was tired instead of staying to make everyone happy. Felt guilty for like 10 mins, then great 😄', likes: 31, liked: false },
-    { id: 5, name: 'Anonymous', category: 'Time management', text: 'Blocked off Sunday mornings as non-negotiable me-time. Week 2 and I already feel more human.', likes: 17, liked: false },
-  ])
 
   const missionSteps = [
     'Pause before you respond to a request',
@@ -311,7 +334,16 @@ function App() {
             <p className="journal-section-heading">Past entries</p>
             {journalEntries.map((entry, i) => (
               <div key={i} className="h-card journal-entry-card">
-                <p className="journal-entry-date">{entry.date}</p>
+                <div className="entry-header">
+                  <p className="journal-entry-date">{entry.date}</p>
+                  <button
+                    className="entry-delete-btn"
+                    onClick={() => setJournalEntries(prev => prev.filter((_, j) => j !== i))}
+                    aria-label="Delete entry"
+                  >
+                    🗑
+                  </button>
+                </div>
                 <p className="journal-entry-preview">{entry.text}</p>
               </div>
             ))}

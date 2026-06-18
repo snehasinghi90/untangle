@@ -817,6 +817,26 @@ h1 {
   gap: 6px;
 }
 
+.entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.entry-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  opacity: 0.4;
+  padding: 0;
+  line-height: 1;
+}
+
+.entry-delete-btn:hover {
+  opacity: 0.8;
+}
+
 .journal-entry-date {
   font-size: 12px;
   font-weight: 700;
