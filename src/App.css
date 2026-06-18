@@ -252,7 +252,7 @@ h1 {
 
 .h-butterfly-name {
   font-size: 14px;
-  color: #aaa;
+  color: #777;
   font-weight: 500;
 }
 
@@ -415,7 +415,7 @@ h1 {
 .nav-label {
   font-size: 11px;
   font-weight: 600;
-  color: #aaa;
+  color: #888;
 }
 
 .nav-item--active .nav-label {
@@ -474,7 +474,7 @@ h1 {
 .profile-topbar {
   display: flex;
   align-items: center;
-  padding: 20px 24px 16px;
+  padding: 28px 24px 20px;
   background: linear-gradient(135deg, #378add, #7c5cbf);
   gap: 12px;
 }
@@ -538,7 +538,7 @@ h1 {
 
 .profile-bstage {
   font-size: 13px;
-  color: #888;
+  color: #777;
   margin-top: 2px;
 }
 
@@ -575,7 +575,7 @@ h1 {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #999;
+  color: #777;
 }
 
 .pf-input {
@@ -612,7 +612,7 @@ h1 {
 .pf-prefix {
   padding: 0 8px 0 11px;
   font-size: 15px;
-  color: #aaa;
+  color: #888;
 }
 
 .pf-input--prefixed {
@@ -718,7 +718,7 @@ h1 {
 
 .safety-small {
   font-size: 12px;
-  color: #999;
+  color: #777;
   line-height: 1.5;
   margin-top: 4px;
 }
@@ -999,13 +999,19 @@ h1 {
   min-width: 0;
 }
 
+/* half-width cards get tighter padding so content doesn't overflow */
+.h-card.ins-half {
+  padding: 14px;
+}
+
 /* streak */
 .ins-streak-card { gap: 10px; }
 
 .ins-streak-label {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #1a1a1a;
+  overflow-wrap: break-word;
 }
 
 .ins-flames {
@@ -1066,7 +1072,7 @@ h1 {
 
 .ins-xp-sub {
   font-size: 11px;
-  color: #888;
+  color: #777;
 }
 
 /* badges */
@@ -1262,7 +1268,7 @@ h1 {
 
 .lesson-row-summary {
   font-size: 13px;
-  color: #888;
+  color: #777;
   line-height: 1.4;
 }
 
@@ -1290,7 +1296,7 @@ h1 {
 .lesson-back:hover { color: #fff; }
 
 .lesson-body {
-  padding: 28px 24px 100px;
+  padding: 20px 24px 100px;
   display: flex;
   flex-direction: column;
   gap: 16px;
