@@ -1606,6 +1606,15 @@ h1 {
 .auth-google-btn:hover:not(:disabled) { background: #f5f5f5; border-color: #bbb; }
 .auth-google-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.auth-google-btn--primary {
+  background: linear-gradient(135deg, #5b4fcf, #7c6fe0);
+  color: #fff;
+  border-color: transparent;
+  font-size: 16px;
+}
+.auth-google-btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, #4a3fbf, #6b5ed0); border-color: transparent; }
+.auth-google-btn--primary .auth-google-g { color: #fff; }
+
 .auth-google-g {
   font-size: 17px;
   font-weight: 900;

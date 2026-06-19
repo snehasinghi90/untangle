@@ -482,24 +482,36 @@ function App() {
       } else {
         const nameToUse = userName.trim() || user.displayName?.split(' ')[0] || ''
         if (nameToUse) setUserName(nameToUse)
-        await Promise.all([
-          setDoc(doc(db, 'users', user.uid), {
-            userName: nameToUse,
-            butterflyName: butterflyName.trim(),
-            selectedCategory: selected,
-            problem,
-            createdAt: serverTimestamp(),
-            lastActive: serverTimestamp(),
-          }),
-          setDoc(doc(db, 'progress', user.uid), {
-            missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
-          }),
-        ])
+        try {
+          await Promise.all([
+            setDoc(doc(db, 'users', user.uid), {
+              userName: nameToUse,
+              butterflyName: butterflyName.trim(),
+              selectedCategory: selected,
+              problem,
+              createdAt: serverTimestamp(),
+              lastActive: serverTimestamp(),
+            }),
+            setDoc(doc(db, 'progress', user.uid), {
+              missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+            }),
+          ])
+          const verifySnap = await getDoc(doc(db, 'users', user.uid))
+          if (!verifySnap.exists()) {
+            console.error('[Firestore] Write appeared to succeed but read-back returned no document for uid:', user.uid)
+          } else {
+            console.log('[Firestore] Write verified for uid:', user.uid, verifySnap.data())
+          }
+        } catch (fsErr) {
+          console.error('[Firestore] setDoc failed for uid:', user.uid, '| code:', fsErr.code, '| message:', fsErr.message, fsErr)
+          throw fsErr
+        }
       }
       save('utgl_hadAccount', true)
       setShowReturnLogin(false)
       setScreen(6)
     } catch (e) {
+      console.error('[handleGoogleAuth] error:', e.code, e.message, e)
       setAuthError(getAuthErrorMessage(e.code))
     } finally {
       setAuthSubmitting(false)
@@ -518,19 +530,30 @@ function App() {
         const result = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword)
         setCurrentUser(result.user)
         setProfileEmail(result.user.email || '')
-        await Promise.all([
-          setDoc(doc(db, 'users', result.user.uid), {
-            userName: userName.trim(),
-            butterflyName: butterflyName.trim(),
-            selectedCategory: selected,
-            problem,
-            createdAt: serverTimestamp(),
-            lastActive: serverTimestamp(),
-          }),
-          setDoc(doc(db, 'progress', result.user.uid), {
-            missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
-          }),
-        ])
+        try {
+          await Promise.all([
+            setDoc(doc(db, 'users', result.user.uid), {
+              userName: userName.trim(),
+              butterflyName: butterflyName.trim(),
+              selectedCategory: selected,
+              problem,
+              createdAt: serverTimestamp(),
+              lastActive: serverTimestamp(),
+            }),
+            setDoc(doc(db, 'progress', result.user.uid), {
+              missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+            }),
+          ])
+          const verifySnap = await getDoc(doc(db, 'users', result.user.uid))
+          if (!verifySnap.exists()) {
+            console.error('[Firestore] Write appeared to succeed but read-back returned no document for uid:', result.user.uid)
+          } else {
+            console.log('[Firestore] Write verified for uid:', result.user.uid, verifySnap.data())
+          }
+        } catch (fsErr) {
+          console.error('[Firestore] setDoc failed for uid:', result.user.uid, '| code:', fsErr.code, '| message:', fsErr.message, fsErr)
+          throw fsErr
+        }
         save('utgl_hadAccount', true)
         setScreen(6)
       } else {
@@ -541,6 +564,7 @@ function App() {
         setShowReturnLogin(false)
       }
     } catch (e) {
+      console.error('[handleEmailAuth] error:', e.code, e.message, e)
       setAuthError(getAuthErrorMessage(e.code))
     } finally {
       setAuthSubmitting(false)
@@ -599,7 +623,7 @@ function App() {
         <p className="tagline" style={{ marginBottom: 32 }}>Sign in to continue your journey.</p>
 
         <button
-          className="auth-google-btn"
+          className="auth-google-btn auth-google-btn--primary"
           onClick={handleGoogleAuth}
           disabled={authSubmitting}
         >
@@ -630,7 +654,7 @@ function App() {
         {authError && <p className="auth-error">{authError}</p>}
 
         <button
-          className="next-button"
+          className="auth-submit-btn"
           onClick={handleEmailAuth}
           disabled={authSubmitting || !authEmail.trim() || !authPassword}
         >
