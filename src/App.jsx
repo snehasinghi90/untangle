@@ -72,7 +72,9 @@ const FLUTTER_ONBOARDING_SYSTEM = "You are Flutter, a warm and supportive mental
 
 const FLUTTER_JOURNAL_SYSTEM = "You are Flutter, a warm mental health companion. When a user shares a journal entry, do two things in 4 sentences maximum: first offer a brief reframe that sounds like hard-won wisdom from a wise friend — not a named psychological framework. Good reframes sound like: 'The guilt you felt? That is not proof you did something wrong. It is just a pattern trying to stay alive.' or 'You were taught that love means saying yes. That is not a flaw — it made sense once.' Then ask ONE specific follow-up question that digs into the exact situation they described, not a generic question like how did that make you feel. Be warm and human. Never name any psychological framework. Never mention therapy, diagnosis, or that you are an AI. End with the question. If anything suggests a crisis, respond only with: 'It sounds like you might be going through something really hard. Please reach out to the 988 Suicide and Crisis Lifeline by calling or texting 988.'"
 
-const FLUTTER_MISSION_SYSTEM = 'You are Flutter, a warm mental health companion. Based on the user\'s specific situation and category, generate a personalized daily mission. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "Short mission title specific to their situation",\n  "steps": [\n    "Specific step 1 related to their actual situation",\n    "Specific step 2",\n    "Specific step 3",\n    "Specific step 4"\n  ]\n}\nThe steps should feel like they were written specifically for this person\'s situation, not generic advice. Use their exact context — if they mentioned their mom, reference that. If they mentioned work, reference that. Make it feel personal and actionable.'
+const FLUTTER_MISSION_SYSTEM = 'You are Flutter, a warm mental health companion. Generate a tiny, doable mission for TODAY ONLY based on the user\'s specific situation. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "5 words max, specific to them",\n  "steps": [\n    "Tiny step 1 specific to their actual situation",\n    "Tiny step 2",\n    "Tiny step 3",\n    "Tiny step 4"\n  ]\n}\nCRITICAL CONSTRAINTS: The whole mission must take 5-10 minutes maximum. It must be doable TODAY — not a multi-day plan or habit. Day 1 should feel almost too easy; the goal is one small win, not a transformation. Steps must be tiny and concrete — not "block out your week" but "notice one moment today when you feel the urge to say yes." Reference their specific context directly — their mom, their boss, their friends, whatever they mentioned. Title is 5 words max, specific to their situation (never generic like "Start Your Journey"). Wrong tone: "Navigate Your First Week Like a Pro" with heavy life-planning steps. Right tone: "Notice One Yes Today" with steps like "Pay attention when someone asks you for something. Notice: do you want to say yes? What feeling comes up? Write one word down. That\'s it."'
+
+const FLUTTER_LESSON_SYSTEM = "You are Flutter. Write ONE short paragraph (2-3 sentences max) that introduces today's lesson topic in a way that connects directly to the user's specific situation. The lesson topic is 'Why We Can't Say No.' Make it feel like it was written just for them — reference their specific context if possible. Warm, not clinical. No framework names."
 
 const DEFAULT_MISSION = {
   title: 'Notice when you say yes',
@@ -157,8 +159,10 @@ function App() {
   const [expandedEntry, setExpandedEntry] = useState(null)
   const [mission, setMission] = useState(() => load('utgl_mission', null))
   const [missionLoading, setMissionLoading] = useState(false)
+  const [lessonIntro, setLessonIntro] = useState(() => load('utgl_lessonIntro', ''))
 
   useEffect(() => { save('utgl_mission', mission) }, [mission])
+  useEffect(() => { save('utgl_lessonIntro', lessonIntro) }, [lessonIntro])
 
   const BottomNav = () => (
     <nav className="nav-bar">
@@ -705,7 +709,7 @@ function App() {
               <p className="h-card-label">📚 Today's Lesson</p>
               <p className="h-card-title">Why We Can't Say No</p>
               <p className="h-card-body">
-                People-pleasing often starts as a survival strategy — a way to stay safe, liked, or needed. Understanding the root helps you respond differently next time.
+                {lessonIntro || "People-pleasing often starts as a survival strategy — a way to stay safe, liked, or needed. Understanding the root helps you respond differently next time."}
               </p>
             </div>
 
@@ -794,22 +798,29 @@ function App() {
           disabled={!butterflyName.trim() || !userName.trim()}
           onClick={async () => {
             setScreen(4)
-            if (mission !== null) return
-            setMissionLoading(true)
-            try {
-              const reply = await callFlutter(
-                FLUTTER_MISSION_SYSTEM,
-                `My situation: ${problem}. I'm working on: ${selected}.`
-              )
-              const parsed = JSON.parse(reply)
-              if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-                setMission(parsed)
-              }
-            } catch {
-              // fail silently — DEFAULT_MISSION will be used
-            } finally {
-              setMissionLoading(false)
-            }
+            const needsMission = mission === null
+            const needsLesson = !lessonIntro
+            if (!needsMission && !needsLesson) return
+            if (needsMission) setMissionLoading(true)
+            const ctx = `My situation: ${problem}. I'm working on: ${selected}.`
+            await Promise.all([
+              needsMission
+                ? callFlutter(FLUTTER_MISSION_SYSTEM, ctx)
+                    .then(reply => {
+                      const parsed = JSON.parse(reply)
+                      if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+                        setMission(parsed)
+                      }
+                    })
+                    .catch(() => {})
+                : Promise.resolve(),
+              needsLesson
+                ? callFlutter(FLUTTER_LESSON_SYSTEM, ctx)
+                    .then(reply => { if (reply) setLessonIntro(reply) })
+                    .catch(() => {})
+                : Promise.resolve(),
+            ])
+            if (needsMission) setMissionLoading(false)
           }}
         >
           Let's go
