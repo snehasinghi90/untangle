@@ -313,26 +313,47 @@ function App() {
   const alreadyCompletedToday = lastCompletedDate === todayStr
   const butterflyEmoji = getButterflyEmoji(missionsCompleted)
 
-  const handleMissionComplete = () => {
+  const handleMissionComplete = async () => {
     if (alreadyCompletedToday) return
-    const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
-    const newMC = missionsCompleted + 1
-    const newXp = xp + 10
-    const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
-    setMissionsCompleted(newMC)
-    setXp(newXp)
-    setStreak(newStreak)
-    setLastCompletedDate(todayStr)
-    setCompletedDates(newDates)
     setMissionSuccess(true)
     setTimeout(() => setMissionSuccess(false), 2000)
+
     if (currentUser) {
-      setDoc(doc(db, 'progress', currentUser.uid), {
-        missionsCompleted: newMC, streak: newStreak, xp: newXp,
-        lastCompletedDate: todayStr, completedDates: newDates,
-      }, { merge: true }).catch(e =>
-        console.error('[Firestore] Progress update (mission complete) failed | code:', e.code, '| message:', e.message, e)
-      )
+      try {
+        const progressSnap = await getDoc(doc(db, 'progress', currentUser.uid))
+        const p = progressSnap.exists() ? progressSnap.data() : {}
+        const currentLastDate = p.lastCompletedDate ?? ''
+        if (currentLastDate === todayStr) return // already completed today per Firestore
+        const currentMC = p.missionsCompleted ?? 0
+        const currentXp = p.xp ?? 0
+        const currentStreak = p.streak ?? 0
+        const currentDates = p.completedDates ?? []
+        const newMC = currentMC + 1
+        const newXp = currentXp + 10
+        const newStreak = currentLastDate === getYesterdayStr() ? currentStreak + 1 : 1
+        const newDates = currentDates.includes(todayStr) ? currentDates : [...currentDates, todayStr]
+        await setDoc(doc(db, 'progress', currentUser.uid), {
+          missionsCompleted: newMC, streak: newStreak, xp: newXp,
+          lastCompletedDate: todayStr, completedDates: newDates,
+        })
+        setMissionsCompleted(newMC)
+        setXp(newXp)
+        setStreak(newStreak)
+        setLastCompletedDate(todayStr)
+        setCompletedDates(newDates)
+      } catch (e) {
+        console.error('[Firestore] Progress update (I Did It!) failed | code:', e.code, '| message:', e.message, e)
+      }
+    } else {
+      const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
+      const newMC = missionsCompleted + 1
+      const newXp = xp + 10
+      const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
+      setMissionsCompleted(newMC)
+      setXp(newXp)
+      setStreak(newStreak)
+      setLastCompletedDate(todayStr)
+      setCompletedDates(newDates)
     }
   }
 
@@ -427,34 +448,52 @@ function App() {
       })
   }
 
-  const handleRightNowDidIt = () => {
+  const handleRightNowDidIt = async () => {
     if (rightNowDidIt) return
     setRightNowDidIt(true)
-    if (lastCompletedDate !== todayStr) {
-      const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
-      const newMC = missionsCompleted + 1
-      const newXp = xp + 10
-      const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
-      setMissionsCompleted(newMC)
-      setXp(newXp)
-      setStreak(newStreak)
-      setLastCompletedDate(todayStr)
-      setCompletedDates(newDates)
-      if (currentUser) {
-        setDoc(doc(db, 'progress', currentUser.uid), {
-          missionsCompleted: newMC, streak: newStreak, xp: newXp,
-          lastCompletedDate: todayStr, completedDates: newDates,
-        }, { merge: true }).catch(e =>
-          console.error('[Firestore] Progress update (right now did it) failed | code:', e.code, '| message:', e.message, e)
-        )
-      }
-    }
+    // Show XP flash immediately — Firestore write happens in the background
     setRightNowXpFlash(true)
     setTimeout(() => {
       setShowRightNow(false)
       setRightNowXpFlash(false)
       setRightNowDidIt(false)
     }, 2000)
+
+    if (currentUser) {
+      try {
+        const progressSnap = await getDoc(doc(db, 'progress', currentUser.uid))
+        const p = progressSnap.exists() ? progressSnap.data() : {}
+        const currentLastDate = p.lastCompletedDate ?? ''
+        if (currentLastDate === todayStr) return // already completed today per Firestore
+        const currentMC = p.missionsCompleted ?? 0
+        const currentXp = p.xp ?? 0
+        const currentStreak = p.streak ?? 0
+        const currentDates = p.completedDates ?? []
+        const newMC = currentMC + 1
+        const newXp = currentXp + 10
+        const newStreak = currentLastDate === getYesterdayStr() ? currentStreak + 1 : 1
+        const newDates = currentDates.includes(todayStr) ? currentDates : [...currentDates, todayStr]
+        await setDoc(doc(db, 'progress', currentUser.uid), {
+          missionsCompleted: newMC, streak: newStreak, xp: newXp,
+          lastCompletedDate: todayStr, completedDates: newDates,
+        })
+        setMissionsCompleted(newMC)
+        setXp(newXp)
+        setStreak(newStreak)
+        setLastCompletedDate(todayStr)
+        setCompletedDates(newDates)
+      } catch (e) {
+        console.error('[Firestore] Progress update (Right Now Did It!) failed | code:', e.code, '| message:', e.message, e)
+      }
+    } else if (lastCompletedDate !== todayStr) {
+      const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
+      const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
+      setMissionsCompleted(m => m + 1)
+      setXp(x => x + 10)
+      setStreak(newStreak)
+      setLastCompletedDate(todayStr)
+      setCompletedDates(newDates)
+    }
   }
 
   const handleGoogleAuth = async () => {
