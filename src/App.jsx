@@ -74,7 +74,7 @@ const FLUTTER_JOURNAL_SYSTEM = "You are Flutter, a warm mental health companion.
 
 const FLUTTER_MISSION_SYSTEM = 'You are Flutter, a warm mental health companion. Generate a tiny, doable mission for TODAY ONLY based on the user\'s specific situation. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "5 words max, specific to them",\n  "steps": [\n    "Tiny step 1 specific to their actual situation",\n    "Tiny step 2",\n    "Tiny step 3",\n    "Tiny step 4"\n  ]\n}\nCRITICAL CONSTRAINTS: The whole mission must take 5-10 minutes maximum. It must be doable TODAY — not a multi-day plan or habit. Day 1 should feel almost too easy; the goal is one small win, not a transformation. Steps must be tiny and concrete — not "block out your week" but "notice one moment today when you feel the urge to say yes." Reference their specific context directly — their mom, their boss, their friends, whatever they mentioned. Title is 5 words max, specific to their situation (never generic like "Start Your Journey"). Wrong tone: "Navigate Your First Week Like a Pro" with heavy life-planning steps. Right tone: "Notice One Yes Today" with steps like "Pay attention when someone asks you for something. Notice: do you want to say yes? What feeling comes up? Write one word down. That\'s it."'
 
-const FLUTTER_LESSON_SYSTEM = "You are Flutter. Write ONE short paragraph (2-3 sentences max) that introduces today's lesson topic in a way that connects directly to the user's specific situation. The lesson topic is 'Why We Can't Say No.' Make it feel like it was written just for them — reference their specific context if possible. Warm, not clinical. No framework names."
+const FLUTTER_LESSON_SYSTEM = 'You are Flutter. Based on the user\'s specific situation, generate a personalized lesson for today. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "Short specific lesson title (5 words max) tailored to their situation — never generic",\n  "body": "ONE paragraph (2-3 sentences max) introducing the lesson in a way that connects directly to their specific situation. Make it feel written just for them. Warm, not clinical. No framework names."\n}\nThe lesson topic is about why people struggle to say no or set limits. The title should feel personal and specific — not \'Why We Can\\\'t Say No\' but something like \'Why You Keep Saying Yes\' or \'Why Saying No Feels Wrong\'.'
 
 const DEFAULT_MISSION = {
   title: 'Notice when you say yes',
@@ -159,10 +159,10 @@ function App() {
   const [expandedEntry, setExpandedEntry] = useState(null)
   const [mission, setMission] = useState(() => load('utgl_mission', null))
   const [missionLoading, setMissionLoading] = useState(false)
-  const [lessonIntro, setLessonIntro] = useState(() => load('utgl_lessonIntro', ''))
+  const [lesson, setLesson] = useState(() => load('utgl_lesson', null))
 
   useEffect(() => { save('utgl_mission', mission) }, [mission])
-  useEffect(() => { save('utgl_lessonIntro', lessonIntro) }, [lessonIntro])
+  useEffect(() => { save('utgl_lesson', lesson) }, [lesson])
 
   const BottomNav = () => (
     <nav className="nav-bar">
@@ -707,9 +707,9 @@ function App() {
 
             <div className="h-card">
               <p className="h-card-label">📚 Today's Lesson</p>
-              <p className="h-card-title">Why We Can't Say No</p>
+              <p className="h-card-title">{lesson?.title || "Why We Can't Say No"}</p>
               <p className="h-card-body">
-                {lessonIntro || "People-pleasing often starts as a survival strategy — a way to stay safe, liked, or needed. Understanding the root helps you respond differently next time."}
+                {lesson?.body || "People-pleasing often starts as a survival strategy — a way to stay safe, liked, or needed. Understanding the root helps you respond differently next time."}
               </p>
             </div>
 
@@ -799,7 +799,7 @@ function App() {
           onClick={async () => {
             setScreen(4)
             const needsMission = mission === null
-            const needsLesson = !lessonIntro
+            const needsLesson = lesson === null
             if (!needsMission && !needsLesson) return
             if (needsMission) setMissionLoading(true)
             const ctx = `My situation: ${problem}. I'm working on: ${selected}.`
@@ -816,7 +816,10 @@ function App() {
                 : Promise.resolve(),
               needsLesson
                 ? callFlutter(FLUTTER_LESSON_SYSTEM, ctx)
-                    .then(reply => { if (reply) setLessonIntro(reply) })
+                    .then(reply => {
+                      const parsed = JSON.parse(reply)
+                      if (parsed.title && parsed.body) setLesson(parsed)
+                    })
                     .catch(() => {})
                 : Promise.resolve(),
             ])
