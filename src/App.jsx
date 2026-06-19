@@ -270,8 +270,14 @@ function App() {
       try {
         await loadUserAndRoute(user)
       } catch (e) {
-        console.error('Auth load error:', e)
-        setScreen(1)
+        console.error('Auth load error:', e.code, e.message, e)
+        const hadAccount = load('utgl_hadAccount', false)
+        if (hadAccount) {
+          setAuthMode('signin')
+          setShowReturnLogin(true)
+        } else {
+          setScreen(1)
+        }
       } finally {
         setAuthLoading(false)
       }
@@ -630,7 +636,7 @@ function App() {
     return (
       <div className="onboarding">
         <div className="logo">🦋</div>
-        <h1>Welcome back</h1>
+        <h1>Welcome back 🦋</h1>
         <p className="tagline" style={{ marginBottom: 32 }}>Sign in to continue your journey.</p>
 
         <button
@@ -676,11 +682,12 @@ function App() {
           className="auth-toggle-link"
           onClick={() => {
             setShowReturnLogin(false)
+            setAuthMode('signup')
             setScreen(1)
             save('utgl_hadAccount', false)
           }}
         >
-          Start fresh →
+          New here? Create an account →
         </button>
       </div>
     )
@@ -1408,9 +1415,35 @@ function App() {
           className="next-button"
           disabled={!butterflyName.trim() || !userName.trim()}
           onClick={async () => {
-            setScreen(5)
             const needsMission = mission === null
             const needsLesson = lesson === null
+
+            if (currentUser) {
+              // Already authenticated — save onboarding data and go straight to Home
+              try {
+                await Promise.all([
+                  setDoc(doc(db, 'users', currentUser.uid), {
+                    userName: userName.trim(),
+                    butterflyName: butterflyName.trim(),
+                    selectedCategory: selected,
+                    problem,
+                    createdAt: serverTimestamp(),
+                    lastActive: serverTimestamp(),
+                  }),
+                  setDoc(doc(db, 'progress', currentUser.uid), {
+                    missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+                  }),
+                ])
+                console.log('[Firestore] Onboarding data saved for already-authenticated user:', currentUser.uid)
+              } catch (e) {
+                console.error('[Firestore] Onboarding save failed | code:', e.code, '| message:', e.message, e)
+              }
+              save('utgl_hadAccount', true)
+              setScreen(6)
+            } else {
+              setScreen(5)
+            }
+
             if (!needsMission && !needsLesson) return
             if (needsMission) setMissionLoading(true)
             const ctx = `My situation: ${problem}. I'm working on: ${selected}.`
@@ -1503,15 +1536,22 @@ function App() {
   }
 
   if (screen === 5) {
+    const isSignup = authMode === 'signup'
     return (
       <div className="onboarding">
         <button className="back-link" onClick={() => setScreen(4)}>← Back</button>
         <div className="logo">🦋</div>
-        <h2 className="screen2-title">Save your progress</h2>
-        <p className="screen2-subtitle">Create a free account so your journey is saved across all your devices.</p>
+        <h2 className="screen2-title">
+          {isSignup ? 'Save your progress 🦋' : 'Welcome back 🦋'}
+        </h2>
+        <p className="screen2-subtitle">
+          {isSignup
+            ? 'Create a free account so your journey is saved everywhere.'
+            : 'Sign in to continue your journey.'}
+        </p>
 
         <button
-          className="auth-google-btn"
+          className={isSignup ? 'auth-google-btn' : 'auth-google-btn auth-google-btn--primary'}
           onClick={handleGoogleAuth}
           disabled={authSubmitting}
         >
@@ -1535,27 +1575,25 @@ function App() {
           value={authPassword}
           onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
           placeholder="Password (min 6 characters)"
-          autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+          autoComplete={isSignup ? 'new-password' : 'current-password'}
           onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
         />
 
         {authError && <p className="auth-error">{authError}</p>}
 
         <button
-          className={authMode === 'signup' ? 'auth-submit-btn' : 'next-button'}
+          className={isSignup ? 'next-button' : 'auth-submit-btn'}
           onClick={handleEmailAuth}
           disabled={authSubmitting || !authEmail.trim() || !authPassword}
         >
-          {authSubmitting ? '...' : authMode === 'signup' ? 'Create account' : 'Sign in'}
+          {authSubmitting ? '...' : isSignup ? 'Create account' : 'Sign in'}
         </button>
 
         <button
           className="auth-toggle-link"
-          onClick={() => { setAuthMode(authMode === 'signup' ? 'signin' : 'signup'); setAuthError('') }}
+          onClick={() => { setAuthMode(isSignup ? 'signin' : 'signup'); setAuthError('') }}
         >
-          {authMode === 'signup'
-            ? 'Already have an account? Sign in →'
-            : "Don't have an account? Sign up →"}
+          {isSignup ? 'Already have an account? Sign in →' : 'New here? Create an account →'}
         </button>
       </div>
     )
