@@ -162,8 +162,8 @@ function App() {
   const [missionLoading, setMissionLoading] = useState(false)
   const [lesson, setLesson] = useState(() => load('utgl_lesson', null))
 
-  useEffect(() => { save('utgl_mission', mission) }, [mission])
-  useEffect(() => { save('utgl_lesson', lesson) }, [lesson])
+  useEffect(() => { if (mission) save('utgl_mission', mission) }, [mission])
+  useEffect(() => { if (lesson) save('utgl_lesson', lesson) }, [lesson])
 
   useEffect(() => {
     if (screen !== 4 || lesson !== null || !selected) return
@@ -172,7 +172,8 @@ function App() {
       : `I'm working on: ${selected}.`
     callFlutter(FLUTTER_LESSON_SYSTEM, ctx)
       .then(reply => {
-        const parsed = JSON.parse(reply)
+        const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+        const parsed = JSON.parse(cleaned)
         if (parsed.title && parsed.body) setLesson(parsed)
       })
       .catch(() => {})
@@ -721,7 +722,7 @@ function App() {
 
             <div className="h-card">
               <p className="h-card-label">📚 Today's Lesson</p>
-              <p className="h-card-title">{lesson?.title || "Why We Can't Say No"}</p>
+              <p className="h-card-title">{lesson?.title || "Today's Lesson"}</p>
               <p className="h-card-body">
                 {lesson?.body || "People-pleasing often starts as a survival strategy — a way to stay safe, liked, or needed. Understanding the root helps you respond differently next time."}
               </p>
@@ -831,7 +832,8 @@ function App() {
               needsLesson
                 ? callFlutter(FLUTTER_LESSON_SYSTEM, ctx)
                     .then(reply => {
-                      const parsed = JSON.parse(reply)
+                      const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+                      const parsed = JSON.parse(cleaned)
                       if (parsed.title && parsed.body) setLesson(parsed)
                     })
                     .catch(() => {})
