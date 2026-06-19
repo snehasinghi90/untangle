@@ -1433,3 +1433,124 @@ h1 {
   color: #333;
   line-height: 1.55;
 }
+
+/* ── Right Now Modal ── */
+.rn-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+}
+
+.rn-modal {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 28px 24px 36px;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: rn-slide-up 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+@keyframes rn-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.rn-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rn-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a1a2e;
+  letter-spacing: -0.3px;
+}
+
+.rn-flutter-card {
+  background: linear-gradient(135deg, #f0f4ff, #f5f0ff);
+  border: 1px solid #d4e0f7;
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+
+.rn-social-proof {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.rn-social-proof strong {
+  color: #5b4fcf;
+}
+
+.rn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.h-btn--green {
+  background: #3cb87a;
+  color: #fff;
+}
+
+.h-btn--green:hover {
+  background: #2fa068;
+}
+
+.h-btn--green:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rn-did-it-btn {
+  font-size: 17px;
+  padding: 16px;
+}
+
+.rn-need-moment {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #999;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+.rn-need-moment:hover { color: #666; }
+
+.rn-xp-flash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  animation: rn-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes rn-pop {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.rn-xp-text {
+  font-size: 28px;
+  font-weight: 900;
+  color: #5b4fcf;
+  letter-spacing: -0.5px;
+}

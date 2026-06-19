@@ -76,6 +76,10 @@ const FLUTTER_MISSION_SYSTEM = 'You are Flutter, a warm mental health companion.
 
 const FLUTTER_LESSON_SYSTEM = 'You are Flutter. Based on the user\'s specific situation, generate a personalized lesson for today. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "Short specific lesson title (5 words max) tailored to their situation — never generic",\n  "body": "ONE paragraph (2-3 sentences max) introducing the lesson in a way that connects directly to their specific situation. Make it feel written just for them. Warm, not clinical. No framework names."\n}\nThe lesson topic is about why people struggle to say no or set limits. The title should feel personal and specific — not \'Why We Can\\\'t Say No\' but something like \'Why You Keep Saying Yes\' or \'Why Saying No Feels Wrong\'.'
 
+const FLUTTER_RIGHT_NOW_SYSTEM = "You are Flutter. The user is in a real moment right now — they're about to do something hard that goes against their people-pleasing pattern. They need immediate, grounding support in 3 sentences maximum.\n\nSentence 1: Acknowledge what's happening in their body right now (chest tight, heart racing, urge to say yes) — make them feel seen.\nSentence 2: Give them one concrete thing to do in the next 10 seconds (take a breath, don't answer on the first ring, say 'let me think about it').\nSentence 3: Remind them they're not alone and they've been building to this moment.\n\nNever be generic. Reference their specific situation and mission. Be warm, human, and brief. No platitudes."
+
+const RIGHT_NOW_FALLBACK = "You've been preparing for exactly this. Whatever you're about to do — you're ready. Take one breath. You know what to say."
+
 const DEFAULT_MISSION = {
   title: 'Notice when you say yes',
   steps: [
@@ -178,6 +182,13 @@ function App() {
   const [completedDates, setCompletedDates] = useState(() => load('utgl_completedDates', []))
   const [missionSuccess, setMissionSuccess] = useState(false)
 
+  const [showRightNow, setShowRightNow] = useState(false)
+  const [rightNowLoading, setRightNowLoading] = useState(false)
+  const [rightNowReply, setRightNowReply] = useState('')
+  const [rightNowPeople, setRightNowPeople] = useState(0)
+  const [rightNowDidIt, setRightNowDidIt] = useState(false)
+  const [rightNowXpFlash, setRightNowXpFlash] = useState(false)
+
   useEffect(() => { save('utgl_missionsCompleted', missionsCompleted) }, [missionsCompleted])
   useEffect(() => { save('utgl_streak', streak) }, [streak])
   useEffect(() => { save('utgl_lastCompletedDate', lastCompletedDate) }, [lastCompletedDate])
@@ -267,6 +278,45 @@ function App() {
     setProblem('')
     setScreen(2)
     setShowProfile(false)
+  }
+
+  const handleRightNowOpen = () => {
+    setShowRightNow(true)
+    setRightNowLoading(true)
+    setRightNowReply('')
+    setRightNowDidIt(false)
+    setRightNowXpFlash(false)
+    setRightNowPeople(Math.floor(Math.random() * 21) + 15)
+    const missionTitle = (mission || DEFAULT_MISSION).title
+    const ctx = `I'm in the moment right now. My mission is: ${missionTitle}. My situation is: ${problem || 'I want to break my people-pleasing patterns.'}`
+    callFlutter(FLUTTER_RIGHT_NOW_SYSTEM, ctx)
+      .then(reply => {
+        setRightNowReply(reply || RIGHT_NOW_FALLBACK)
+        setRightNowLoading(false)
+      })
+      .catch(() => {
+        setRightNowReply(RIGHT_NOW_FALLBACK)
+        setRightNowLoading(false)
+      })
+  }
+
+  const handleRightNowDidIt = () => {
+    if (rightNowDidIt) return
+    setRightNowDidIt(true)
+    const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : (lastCompletedDate === todayStr ? streak : 1)
+    if (lastCompletedDate !== todayStr) {
+      setMissionsCompleted(prev => prev + 1)
+      setXp(prev => prev + 10)
+      setStreak(newStreak)
+      setLastCompletedDate(todayStr)
+      setCompletedDates(prev => prev.includes(todayStr) ? prev : [...prev, todayStr])
+    }
+    setRightNowXpFlash(true)
+    setTimeout(() => {
+      setShowRightNow(false)
+      setRightNowXpFlash(false)
+      setRightNowDidIt(false)
+    }, 2000)
   }
 
   const BottomNav = () => (
@@ -860,7 +910,7 @@ function App() {
                     {alreadyCompletedToday ? '✅ Done for today!' : '✅ I Did The Steps!'}
                   </button>
                   {missionSuccess && <p className="flutter-thinking">🎉 Great work! Keep going.</p>}
-                  <button className="h-btn h-btn--red">🔥 I'm Doing It RIGHT NOW!</button>
+                  <button className="h-btn h-btn--red" onClick={handleRightNowOpen}>🔥 I'm Doing It RIGHT NOW!</button>
                 </>
               )}
             </div>
@@ -897,6 +947,53 @@ function App() {
           </div>
         </div>
         <BottomNav />
+
+        {showRightNow && (
+          <div className="rn-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowRightNow(false) }}>
+            <div className="rn-modal">
+              <div className="rn-header">
+                <span className="rn-title">🔥 You're in the moment</span>
+              </div>
+
+              <div className="rn-flutter-card">
+                <p className="flutter-name">Flutter</p>
+                {rightNowLoading ? (
+                  <p className="flutter-thinking">Flutter is with you right now…</p>
+                ) : (
+                  <p className="flutter-reply-text">{rightNowReply}</p>
+                )}
+              </div>
+
+              {!rightNowLoading && (
+                <p className="rn-social-proof">
+                  You're not alone — <strong>{rightNowPeople} people</strong> doing something hard right now too.
+                </p>
+              )}
+
+              <div className="rn-actions">
+                {rightNowXpFlash ? (
+                  <div className="rn-xp-flash">
+                    <span className="rn-xp-text">+10 XP ⚡</span>
+                    <p className="flutter-thinking" style={{ textAlign: 'center' }}>🎉 You did it! So proud of you.</p>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      className="h-btn h-btn--green rn-did-it-btn"
+                      onClick={handleRightNowDidIt}
+                      disabled={rightNowLoading}
+                    >
+                      ✅ I Did It!
+                    </button>
+                    <button className="rn-need-moment" onClick={() => setShowRightNow(false)}>
+                      I need a moment...
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </>
     )
   }
