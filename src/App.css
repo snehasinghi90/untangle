@@ -1354,3 +1354,47 @@ h1 {
   color: #666;
   line-height: 1.45;
 }
+/* ── Flutter AI reply cards ── */
+.flutter-reply-card {
+  background: linear-gradient(135deg, #f0f4ff, #f5f0ff);
+  border: 1px solid #d4e0f7;
+}
+
+.flutter-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7c5cbf;
+  margin-bottom: 6px;
+}
+
+.flutter-thinking {
+  font-size: 14px;
+  color: #888;
+  font-style: italic;
+}
+
+.flutter-thinking--center {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.flutter-reply-text {
+  font-size: 15px;
+  color: #333;
+  line-height: 1.55;
+}
+
+.onboarding-reply-card {
+  width: 100%;
+  background: linear-gradient(135deg, #f0f4ff, #f5f0ff);
+  border: 1px solid #d4e0f7;
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 4px;
+}
+
+.onboarding-reply-text {
+  font-size: 15px;
+  color: #333;
+  line-height: 1.55;
+}

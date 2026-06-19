@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import './App.css'
 import { db, auth } from './firebase'
 import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
@@ -68,6 +68,23 @@ function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
+const FLUTTER_ONBOARDING_SYSTEM = "You are Flutter, a warm and supportive mental health companion. The user has just shared what's bothering them. Respond in 2 sentences maximum: first acknowledge what they shared with genuine empathy, then say you'd like to understand better. Be warm, never clinical. Never mention therapy or diagnosis."
+
+const FLUTTER_JOURNAL_SYSTEM = "You are Flutter, a warm mental health companion using Adlerian psychology. When a user shares a journal entry, do two things in under 4 sentences: ask ONE specific follow-up question about what they wrote, then offer a brief Adlerian reframe focused on courage and growth (not thought-challenging). Be warm and human. Never mention therapy, diagnosis, or that you are an AI. End with the question. If anything suggests a crisis, respond only with: 'It sounds like you might be going through something really hard. Please reach out to the 988 Suicide and Crisis Lifeline by calling or texting 988.'"
+
+async function callFlutter(system, userText) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system,
+      messages: [{ role: 'user', content: userText }],
+    }),
+  })
+  const data = await res.json()
+  return data.response || ''
+}
+
 const CATEGORIES = [
   'People-pleasing',
   'Self-comparison',
@@ -121,6 +138,11 @@ function App() {
 
   const [showCompose, setShowCompose] = useState(false)
   const [composeDraft, setComposeDraft] = useState('')
+
+  const [onboardingAiReply, setOnboardingAiReply] = useState('')
+  const [onboardingAiLoading, setOnboardingAiLoading] = useState(false)
+  const [journalAiReply, setJournalAiReply] = useState('')
+  const [journalAiLoading, setJournalAiLoading] = useState(false)
 
   const missionSteps = [
     'Pause before you respond to a request',
@@ -306,11 +328,22 @@ function App() {
 
   if (screen === 4 && navTab === 'journal') {
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    const saveEntry = () => {
+    const saveEntry = async () => {
       if (!journalDraft.trim()) return
       const label = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-      setJournalEntries(prev => [{ date: label, text: journalDraft.trim() }, ...prev])
+      const text = journalDraft.trim()
+      setJournalEntries(prev => [{ date: label, text }, ...prev])
       setJournalDraft('')
+      setJournalAiReply('')
+      setJournalAiLoading(true)
+      try {
+        const reply = await callFlutter(FLUTTER_JOURNAL_SYSTEM, text)
+        setJournalAiReply(reply)
+      } catch {
+        // fail silently
+      } finally {
+        setJournalAiLoading(false)
+      }
     }
     return (
       <>
@@ -340,19 +373,30 @@ function App() {
 
             <p className="journal-section-heading">Past entries</p>
             {journalEntries.map((entry, i) => (
-              <div key={i} className="h-card journal-entry-card">
-                <div className="entry-header">
-                  <p className="journal-entry-date">{entry.date}</p>
-                  <button
-                    className="entry-delete-btn"
-                    onClick={() => setJournalEntries(prev => prev.filter((_, j) => j !== i))}
-                    aria-label="Delete entry"
-                  >
-                    🗑
-                  </button>
+              <Fragment key={i}>
+                <div className="h-card journal-entry-card">
+                  <div className="entry-header">
+                    <p className="journal-entry-date">{entry.date}</p>
+                    <button
+                      className="entry-delete-btn"
+                      onClick={() => setJournalEntries(prev => prev.filter((_, j) => j !== i))}
+                      aria-label="Delete entry"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                  <p className="journal-entry-preview">{entry.text}</p>
                 </div>
-                <p className="journal-entry-preview">{entry.text}</p>
-              </div>
+                {i === 0 && (journalAiLoading || journalAiReply) && (
+                  <div className="h-card flutter-reply-card">
+                    <p className="flutter-name">🦋 Flutter</p>
+                    {journalAiLoading
+                      ? <p className="flutter-thinking">Flutter is thinking…</p>
+                      : <p className="flutter-reply-text">{journalAiReply}</p>
+                    }
+                  </div>
+                )}
+              </Fragment>
             ))}
           </div>
         </div>
@@ -753,24 +797,56 @@ function App() {
     )
   }
 
+  const handleOnboardingNext = async () => {
+    if (!problem.trim()) { setScreen(2); return }
+    setOnboardingAiLoading(true)
+    try {
+      const reply = await callFlutter(FLUTTER_ONBOARDING_SYSTEM, problem)
+      if (reply) {
+        setOnboardingAiReply(reply)
+      } else {
+        setScreen(2)
+      }
+    } catch {
+      setScreen(2)
+    } finally {
+      setOnboardingAiLoading(false)
+    }
+  }
+
   return (
     <div className="onboarding">
       <div className="logo">🦋</div>
       <h1>Untangle</h1>
       <p className="tagline">Change your life. Feel less alone.</p>
 
-      <label className="question">Hi! What's going on today?</label>
-      <textarea
-        className="problem-input"
-        value={problem}
-        onChange={(e) => setProblem(e.target.value)}
-        placeholder="I can't say no to people, even when I'm exhausted..."
-        rows="4"
-      />
-
-      <button className="next-button" onClick={() => setScreen(2)}>
-        Next →
-      </button>
+      {onboardingAiLoading ? (
+        <p className="flutter-thinking flutter-thinking--center">Flutter is thinking…</p>
+      ) : onboardingAiReply ? (
+        <>
+          <div className="onboarding-reply-card">
+            <p className="flutter-name">🦋 Flutter</p>
+            <p className="onboarding-reply-text">{onboardingAiReply}</p>
+          </div>
+          <button className="next-button" onClick={() => setScreen(2)}>
+            Continue →
+          </button>
+        </>
+      ) : (
+        <>
+          <label className="question">Hi! What's going on today?</label>
+          <textarea
+            className="problem-input"
+            value={problem}
+            onChange={(e) => setProblem(e.target.value)}
+            placeholder="I can't say no to people, even when I'm exhausted..."
+            rows="4"
+          />
+          <button className="next-button" onClick={handleOnboardingNext}>
+            Next →
+          </button>
+        </>
+      )}
     </div>
   )
 }
