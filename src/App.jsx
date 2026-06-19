@@ -108,7 +108,7 @@ const CATEGORIES = [
 ]
 
 function App() {
-  const [problem, setProblem] = useState('')
+  const [problem, setProblem] = useState(() => load('utgl_problem', ''))
   const [screen, setScreen] = useState(() => load('utgl_screen', 1))
   const [selected, setSelected] = useState(() => load('utgl_selected', null))
   const [butterflyName, setButterflyName] = useState(() => load('utgl_butterflyName', ''))
@@ -123,6 +123,7 @@ function App() {
   const [likedPosts, setLikedPosts] = useState(() => load('utgl_likedPosts', []))
 
   useEffect(() => { save('utgl_screen', screen) }, [screen])
+  useEffect(() => { save('utgl_problem', problem) }, [problem])
   useEffect(() => { save('utgl_selected', selected) }, [selected])
   useEffect(() => { save('utgl_butterflyName', butterflyName) }, [butterflyName])
   useEffect(() => { save('utgl_userName', userName) }, [userName])
@@ -163,6 +164,19 @@ function App() {
 
   useEffect(() => { save('utgl_mission', mission) }, [mission])
   useEffect(() => { save('utgl_lesson', lesson) }, [lesson])
+
+  useEffect(() => {
+    if (screen !== 4 || lesson !== null || !selected) return
+    const ctx = problem
+      ? `My situation: ${problem}. I'm working on: ${selected}.`
+      : `I'm working on: ${selected}.`
+    callFlutter(FLUTTER_LESSON_SYSTEM, ctx)
+      .then(reply => {
+        const parsed = JSON.parse(reply)
+        if (parsed.title && parsed.body) setLesson(parsed)
+      })
+      .catch(() => {})
+  }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const BottomNav = () => (
     <nav className="nav-bar">
