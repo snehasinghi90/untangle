@@ -200,6 +200,7 @@ function App() {
   const [rightNowPeople, setRightNowPeople] = useState(0)
   const [rightNowDidIt, setRightNowDidIt] = useState(false)
   const [rightNowXpFlash, setRightNowXpFlash] = useState(false)
+  const [rightNowAlreadyDone, setRightNowAlreadyDone] = useState(false)
 
   const [authLoading, setAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
@@ -451,20 +452,41 @@ function App() {
   const handleRightNowDidIt = async () => {
     if (rightNowDidIt) return
     setRightNowDidIt(true)
-    // Show XP flash immediately — Firestore write happens in the background
-    setRightNowXpFlash(true)
-    setTimeout(() => {
-      setShowRightNow(false)
-      setRightNowXpFlash(false)
-      setRightNowDidIt(false)
-    }, 2000)
+
+    const showAlreadyDone = () => {
+      setRightNowAlreadyDone(true)
+      setTimeout(() => {
+        setShowRightNow(false)
+        setRightNowAlreadyDone(false)
+        setRightNowDidIt(false)
+      }, 2500)
+    }
+
+    const showSuccess = () => {
+      setRightNowXpFlash(true)
+      setTimeout(() => {
+        setShowRightNow(false)
+        setRightNowXpFlash(false)
+        setRightNowDidIt(false)
+      }, 2000)
+    }
+
+    // Fast local check first
+    if (alreadyCompletedToday) {
+      showAlreadyDone()
+      return
+    }
 
     if (currentUser) {
       try {
         const progressSnap = await getDoc(doc(db, 'progress', currentUser.uid))
         const p = progressSnap.exists() ? progressSnap.data() : {}
         const currentLastDate = p.lastCompletedDate ?? ''
-        if (currentLastDate === todayStr) return // already completed today per Firestore
+        if (currentLastDate === todayStr) {
+          setLastCompletedDate(todayStr)
+          showAlreadyDone()
+          return
+        }
         const currentMC = p.missionsCompleted ?? 0
         const currentXp = p.xp ?? 0
         const currentStreak = p.streak ?? 0
@@ -485,7 +507,7 @@ function App() {
       } catch (e) {
         console.error('[Firestore] Progress update (Right Now Did It!) failed | code:', e.code, '| message:', e.message, e)
       }
-    } else if (lastCompletedDate !== todayStr) {
+    } else {
       const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
       const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
       setMissionsCompleted(m => m + 1)
@@ -494,6 +516,8 @@ function App() {
       setLastCompletedDate(todayStr)
       setCompletedDates(newDates)
     }
+
+    showSuccess()
   }
 
   const handleGoogleAuth = async () => {
@@ -1344,7 +1368,11 @@ function App() {
               )}
 
               <div className="rn-actions">
-                {rightNowXpFlash ? (
+                {rightNowAlreadyDone ? (
+                  <p className="flutter-thinking" style={{ textAlign: 'center' }}>
+                    You already completed your mission today 🦋 Come back tomorrow!
+                  </p>
+                ) : rightNowXpFlash ? (
                   <div className="rn-xp-flash">
                     <span className="rn-xp-text">+10 XP ⚡</span>
                     <p className="flutter-thinking" style={{ textAlign: 'center' }}>🎉 You did it! So proud of you.</p>
