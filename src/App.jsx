@@ -203,12 +203,12 @@ function App() {
 
   const [authLoading, setAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
-  const [showReturnLogin, setShowReturnLogin] = useState(false)
   const [authMode, setAuthMode] = useState('signup')
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [showEmailSignIn, setShowEmailSignIn] = useState(false)
   const authInitialized = useRef(false)
 
   useEffect(() => { save('utgl_missionsCompleted', missionsCompleted) }, [missionsCompleted])
@@ -244,9 +244,9 @@ function App() {
       )
       setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
       setMoodCheckedIn(load('utgl_moodCheckedInDate', '') === getTodayStr())
-      setScreen(6)
+      setScreen(7)
     } else {
-      setScreen(1)
+      setScreen(2)
     }
   }
 
@@ -256,13 +256,7 @@ function App() {
       authInitialized.current = true
       if (!user) {
         setCurrentUser(null)
-        const hadAccount = load('utgl_hadAccount', false)
-        if (hadAccount) {
-          setAuthMode('signin')
-          setShowReturnLogin(true)
-        } else {
-          setScreen(1)
-        }
+        setScreen(1)
         setAuthLoading(false)
         return
       }
@@ -271,13 +265,7 @@ function App() {
         await loadUserAndRoute(user)
       } catch (e) {
         console.error('Auth load error:', e.code, e.message, e)
-        const hadAccount = load('utgl_hadAccount', false)
-        if (hadAccount) {
-          setAuthMode('signin')
-          setShowReturnLogin(true)
-        } else {
-          setScreen(1)
-        }
+        setScreen(1)
       } finally {
         setAuthLoading(false)
       }
@@ -295,6 +283,7 @@ function App() {
 
   useEffect(() => { if (mission) save('utgl_mission', mission) }, [mission])
   useEffect(() => { if (lesson) save('utgl_lesson', lesson) }, [lesson])
+  useEffect(() => { if (screen === 6) setAuthMode('signup') }, [screen])
 
   useEffect(() => {
     if (navTab !== 'journal' || !currentUser?.uid) return
@@ -306,7 +295,7 @@ function App() {
   const [lessonFailed, setLessonFailed] = useState(false)
 
   useEffect(() => {
-    if (screen !== 6 || lesson !== null || !selected) return
+    if (screen !== 7 || lesson !== null || !selected) return
     const ctx = problem
       ? `My situation: ${problem}. I'm working on: ${selected}.`
       : `I'm working on: ${selected}.`
@@ -352,7 +341,6 @@ function App() {
     localStorage.clear()
     save('utgl_hadAccount', false)
     setCurrentUser(null)
-    setShowReturnLogin(false)
     setScreen(1)
     setProblem('')
     setSelected(null)
@@ -375,6 +363,7 @@ function App() {
     setAuthEmail('')
     setAuthPassword('')
     setAuthError('')
+    setShowEmailSignIn(false)
   }
 
   const handleChangeCategory = async () => {
@@ -391,7 +380,7 @@ function App() {
     setXp(0)
     setCompletedDates([])
     setProblem('')
-    setScreen(3)
+    setScreen(4)
     setShowProfile(false)
     if (currentUser) {
       setDoc(doc(db, 'progress', currentUser.uid), {
@@ -525,10 +514,26 @@ function App() {
         }
       }
       save('utgl_hadAccount', true)
-      setShowReturnLogin(false)
-      setScreen(6)
+      setScreen(7)
     } catch (e) {
       console.error('[handleGoogleAuth] error:', e.code, e.message, e)
+      setAuthError(getAuthErrorMessage(e.code))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  // Used on the landing screen — routes returning users to Home, new users to onboarding
+  const handleLandingGoogle = async () => {
+    setAuthError('')
+    setAuthSubmitting(true)
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      setCurrentUser(result.user)
+      save('utgl_hadAccount', true)
+      await loadUserAndRoute(result.user)
+    } catch (e) {
+      console.error('[handleLandingGoogle] error:', e.code, e.message, e)
       setAuthError(getAuthErrorMessage(e.code))
     } finally {
       setAuthSubmitting(false)
@@ -572,13 +577,13 @@ function App() {
           throw fsErr
         }
         save('utgl_hadAccount', true)
-        setScreen(6)
+        setScreen(7)
       } else {
+        // Sign-in path (used from landing screen email sign-in)
         const result = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword)
         setCurrentUser(result.user)
         await loadUserAndRoute(result.user)
         save('utgl_hadAccount', true)
-        setShowReturnLogin(false)
       }
     } catch (e) {
       console.error('[handleEmailAuth] error:', e.code, e.message, e)
@@ -589,8 +594,8 @@ function App() {
   }
 
   const handleOnboardingNext = async () => {
-    if (!problem.trim()) { setScreen(3); return }
-    setScreen(2)
+    if (!problem.trim()) { setScreen(4); return }
+    setScreen(3)
     setOnboardingAiLoading(true)
     try {
       const reply = await callFlutter(FLUTTER_ONBOARDING_SYSTEM, problem)
@@ -599,10 +604,10 @@ function App() {
         const match = CATEGORIES.find(c => reply.includes(c))
         if (match) setSelected(match)
       } else {
-        setScreen(3)
+        setScreen(4)
       }
     } catch {
-      setScreen(3)
+      setScreen(4)
     } finally {
       setOnboardingAiLoading(false)
     }
@@ -632,68 +637,7 @@ function App() {
     )
   }
 
-  if (showReturnLogin) {
-    return (
-      <div className="onboarding">
-        <div className="logo">🦋</div>
-        <h1>Welcome back 🦋</h1>
-        <p className="tagline" style={{ marginBottom: 32 }}>Sign in to continue your journey.</p>
-
-        <button
-          className="auth-google-btn auth-google-btn--primary"
-          onClick={handleGoogleAuth}
-          disabled={authSubmitting}
-        >
-          <span className="auth-google-g">G</span>
-          Continue with Google
-        </button>
-
-        <div className="auth-divider"><span>or</span></div>
-
-        <input
-          className="name-input auth-field"
-          type="email"
-          value={authEmail}
-          onChange={e => { setAuthEmail(e.target.value); setAuthError('') }}
-          placeholder="Email address"
-          autoComplete="email"
-        />
-        <input
-          className="name-input auth-field"
-          type="password"
-          value={authPassword}
-          onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
-          placeholder="Password"
-          autoComplete="current-password"
-          onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
-        />
-
-        {authError && <p className="auth-error">{authError}</p>}
-
-        <button
-          className="auth-submit-btn"
-          onClick={handleEmailAuth}
-          disabled={authSubmitting || !authEmail.trim() || !authPassword}
-        >
-          {authSubmitting ? '...' : 'Sign in'}
-        </button>
-
-        <button
-          className="auth-toggle-link"
-          onClick={() => {
-            setShowReturnLogin(false)
-            setAuthMode('signup')
-            setScreen(1)
-            save('utgl_hadAccount', false)
-          }}
-        >
-          New here? Create an account →
-        </button>
-      </div>
-    )
-  }
-
-  if (screen === 6 && showProfile) {
+  if (screen === 7 && showProfile) {
     const initials = userName.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
     const pwValid = newPw.length >= 6 && newPw === confirmPw
 
@@ -854,7 +798,7 @@ function App() {
     )
   }
 
-  if (screen === 6 && navTab === 'journal') {
+  if (screen === 7 && navTab === 'journal') {
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     const saveEntry = async () => {
       if (!journalDraft.trim()) return
@@ -972,7 +916,7 @@ function App() {
     )
   }
 
-  if (screen === 6 && navTab === 'community') {
+  if (screen === 7 && navTab === 'community') {
     const submitPost = async () => {
       if (!composeDraft.trim()) return
       await addDoc(collection(db, 'posts'), {
@@ -1046,7 +990,7 @@ function App() {
     )
   }
 
-  if (screen === 6 && navTab === 'insights' && openLesson) {
+  if (screen === 7 && navTab === 'insights' && openLesson) {
     return (
       <>
         <div className="lesson-screen">
@@ -1064,7 +1008,7 @@ function App() {
     )
   }
 
-  if (screen === 6 && navTab === 'insights') {
+  if (screen === 7 && navTab === 'insights') {
     const moodPoints = [
       { day: 'Mon', val: 4 },
       { day: 'Tue', val: 5 },
@@ -1218,7 +1162,7 @@ function App() {
     )
   }
 
-  if (screen === 6 && navTab !== 'home') {
+  if (screen === 7 && navTab !== 'home') {
     const title = NAV_ITEMS.find(n => n.id === navTab).label
     return (
       <>
@@ -1230,7 +1174,7 @@ function App() {
     )
   }
 
-  if (screen === 6) {
+  if (screen === 7) {
     return (
       <>
         <div className="home">
@@ -1388,10 +1332,10 @@ function App() {
     )
   }
 
-  if (screen === 4) {
+  if (screen === 5) {
     return (
       <div className="onboarding">
-        <button className="back-link" onClick={() => setScreen(3)}>← Back</button>
+        <button className="back-link" onClick={() => setScreen(4)}>← Back</button>
         <div className="logo">🥚</div>
         <h2 className="screen2-title">Name your butterfly</h2>
         <p className="screen2-subtitle">As you grow, so will they.</p>
@@ -1439,9 +1383,9 @@ function App() {
                 console.error('[Firestore] Onboarding save failed | code:', e.code, '| message:', e.message, e)
               }
               save('utgl_hadAccount', true)
-              setScreen(6)
+              setScreen(7)
             } else {
-              setScreen(5)
+              setScreen(6)
             }
 
             if (!needsMission && !needsLesson) return
@@ -1477,10 +1421,10 @@ function App() {
     )
   }
 
-  if (screen === 3) {
+  if (screen === 4) {
     return (
       <div className="onboarding">
-        <button className="back-link" onClick={() => setScreen(onboardingAiReply ? 2 : 1)}>← Back</button>
+        <button className="back-link" onClick={() => setScreen(onboardingAiReply ? 3 : 2)}>← Back</button>
         <h2 className="screen2-title">Which of these fits?</h2>
         <p className="screen2-subtitle">Pick the one that feels closest.</p>
         <div className="category-list">
@@ -1495,7 +1439,7 @@ function App() {
           ))}
         </div>
         {selected && (
-          <button className="next-button continue-button" onClick={() => setScreen(4)}>
+          <button className="next-button continue-button" onClick={() => setScreen(5)}>
             Continue →
           </button>
         )}
@@ -1503,10 +1447,10 @@ function App() {
     )
   }
 
-  if (screen === 2) {
+  if (screen === 3) {
     return (
       <div className="onboarding">
-        <button className="back-link" onClick={() => setScreen(1)}>← Back</button>
+        <button className="back-link" onClick={() => setScreen(2)}>← Back</button>
         {onboardingAiLoading ? (
           <p className="flutter-thinking flutter-thinking--center">Flutter is thinking…</p>
         ) : onboardingAiReply ? (
@@ -1522,12 +1466,12 @@ function App() {
                 })()}
               </p>
             </div>
-            <button className="next-button" onClick={() => setScreen(3)}>
+            <button className="next-button" onClick={() => setScreen(4)}>
               Continue →
             </button>
           </>
         ) : (
-          <button className="next-button" onClick={() => setScreen(3)}>
+          <button className="next-button" onClick={() => setScreen(4)}>
             Choose a category →
           </button>
         )}
@@ -1535,27 +1479,21 @@ function App() {
     )
   }
 
-  if (screen === 5) {
-    const isSignup = authMode === 'signup'
+  if (screen === 6) {
     return (
       <div className="onboarding">
-        <button className="back-link" onClick={() => setScreen(4)}>← Back</button>
+        <button className="back-link" onClick={() => setScreen(5)}>← Back</button>
         <div className="logo">🦋</div>
-        <h2 className="screen2-title">
-          {isSignup ? 'Save your progress 🦋' : 'Welcome back 🦋'}
-        </h2>
-        <p className="screen2-subtitle">
-          {isSignup
-            ? 'Create a free account so your journey is saved everywhere.'
-            : 'Sign in to continue your journey.'}
-        </p>
+        <h2 className="screen2-title">Save your progress 🦋</h2>
+        <p className="screen2-subtitle">Create a free account so your journey is saved on all your devices.</p>
 
         <button
-          className={isSignup ? 'auth-google-btn' : 'auth-google-btn auth-google-btn--primary'}
+          className="next-button"
           onClick={handleGoogleAuth}
           disabled={authSubmitting}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
         >
-          <span className="auth-google-g">G</span>
+          <span style={{ fontWeight: 900, fontSize: 17 }}>G</span>
           Continue with Google
         </button>
 
@@ -1575,47 +1513,126 @@ function App() {
           value={authPassword}
           onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
           placeholder="Password (min 6 characters)"
-          autoComplete={isSignup ? 'new-password' : 'current-password'}
+          autoComplete="new-password"
           onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
         />
 
         {authError && <p className="auth-error">{authError}</p>}
 
         <button
-          className={isSignup ? 'next-button' : 'auth-submit-btn'}
+          className="next-button"
           onClick={handleEmailAuth}
-          disabled={authSubmitting || !authEmail.trim() || !authPassword}
+          disabled={authSubmitting || !authEmail.trim() || authPassword.length < 6}
         >
-          {authSubmitting ? '...' : isSignup ? 'Create account' : 'Sign in'}
+          {authSubmitting ? '...' : 'Create account'}
         </button>
 
+        <button className="auth-toggle-link" onClick={() => setScreen(7)} style={{ marginTop: 12 }}>
+          Skip for now →
+        </button>
         <button
           className="auth-toggle-link"
-          onClick={() => { setAuthMode(isSignup ? 'signin' : 'signup'); setAuthError('') }}
+          style={{ marginTop: 6, opacity: 0.6 }}
+          onClick={() => { setScreen(1); setAuthError('') }}
         >
-          {isSignup ? 'Already have an account? Sign in →' : 'New here? Create an account →'}
+          Already have an account? Sign in →
         </button>
       </div>
     )
   }
 
+  if (screen === 2) {
+    return (
+      <div className="onboarding">
+        <button className="back-link" onClick={() => setScreen(1)}>← Back</button>
+        <div className="logo">🦋</div>
+        <h2 className="screen2-title">Hi! What's going on today?</h2>
+        <p className="screen2-subtitle">Share whatever's on your mind. Flutter will listen.</p>
+        <textarea
+          className="problem-input"
+          value={problem}
+          onChange={(e) => setProblem(e.target.value)}
+          placeholder="I can't say no to people, even when I'm exhausted..."
+          rows="4"
+        />
+        <button className="next-button" onClick={handleOnboardingNext}>
+          Next →
+        </button>
+      </div>
+    )
+  }
+
+  // Screen 1 — Landing (new users and signed-out returning users)
   return (
     <div className="onboarding">
       <div className="logo">🦋</div>
       <h1>Untangle</h1>
       <p className="tagline">Change your life. Feel less alone.</p>
 
-      <label className="question">Hi! What's going on today?</label>
-      <textarea
-        className="problem-input"
-        value={problem}
-        onChange={(e) => setProblem(e.target.value)}
-        placeholder="I can't say no to people, even when I'm exhausted..."
-        rows="4"
-      />
-      <button className="next-button" onClick={handleOnboardingNext}>
-        Next →
+      <button
+        className="next-button"
+        onClick={handleLandingGoogle}
+        disabled={authSubmitting}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 32 }}
+      >
+        <span style={{ fontWeight: 900, fontSize: 17 }}>G</span>
+        {authSubmitting ? 'Signing in...' : 'Continue with Google'}
       </button>
+
+      {showEmailSignIn ? (
+        <>
+          <div className="auth-divider"><span>or</span></div>
+          <input
+            className="name-input auth-field"
+            type="email"
+            value={authEmail}
+            onChange={e => { setAuthEmail(e.target.value); setAuthError('') }}
+            placeholder="Email address"
+            autoComplete="email"
+            autoFocus
+          />
+          <input
+            className="name-input auth-field"
+            type="password"
+            value={authPassword}
+            onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
+            placeholder="Password"
+            autoComplete="current-password"
+            onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
+          />
+          {authError && <p className="auth-error">{authError}</p>}
+          <button
+            className="auth-submit-btn"
+            onClick={handleEmailAuth}
+            disabled={authSubmitting || !authEmail.trim() || !authPassword}
+          >
+            {authSubmitting ? '...' : 'Sign in'}
+          </button>
+          <button
+            className="auth-toggle-link"
+            onClick={() => { setShowEmailSignIn(false); setAuthError('') }}
+          >
+            ← Back
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="auth-toggle-link"
+            style={{ marginTop: 16 }}
+            onClick={() => { setShowEmailSignIn(true); setAuthMode('signin') }}
+          >
+            Sign in with email
+          </button>
+          <button
+            className="auth-toggle-link"
+            style={{ marginTop: 8, fontWeight: 600 }}
+            onClick={() => setScreen(2)}
+          >
+            Check it out first →
+          </button>
+        </>
+      )}
     </div>
   )
 }
