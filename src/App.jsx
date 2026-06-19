@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
+import jsPDF from 'jspdf'
 import './App.css'
 import { db, auth, googleProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase'
 import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, increment, serverTimestamp, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore'
@@ -79,6 +81,8 @@ const FLUTTER_LESSON_SYSTEM = 'You are Flutter. Based on the user\'s specific si
 const FLUTTER_RIGHT_NOW_SYSTEM = "You are Flutter. The user is in a real moment right now — they're about to do something hard that goes against their people-pleasing pattern. They need immediate, grounding support in 3 sentences maximum.\n\nSentence 1: Acknowledge what's happening in their body right now (chest tight, heart racing, urge to say yes) — make them feel seen.\nSentence 2: Give them one concrete thing to do in the next 10 seconds (take a breath, don't answer on the first ring, say 'let me think about it').\nSentence 3: Remind them they're not alone and they've been building to this moment.\n\nNever be generic. Reference their specific situation and mission. Be warm, human, and brief. No platitudes."
 
 const RIGHT_NOW_FALLBACK = "You've been preparing for exactly this. Whatever you're about to do — you're ready. Take one breath. You know what to say."
+
+const FLUTTER_INSIGHTS_SYSTEM = "You are Flutter. Read these journal entries and write a warm, honest 3-4 sentence summary of what patterns you notice — what this person seems to be working through, what's improving, what's still hard. Reference specific things they wrote about. Don't use clinical language. Sound like a wise friend who's been paying attention. Start with 'Over the past [X] entries...' Never mention Adler or any framework name."
 
 function getAuthErrorMessage(code) {
   if (['auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code))
@@ -202,6 +206,11 @@ function App() {
   const [rightNowXpFlash, setRightNowXpFlash] = useState(false)
   const [rightNowAlreadyDone, setRightNowAlreadyDone] = useState(false)
 
+  const [moodEntries, setMoodEntries] = useState([])
+  const [insightsSummary, setInsightsSummary] = useState('')
+  const [insightsSummaryLoading, setInsightsSummaryLoading] = useState(false)
+  const insightsSummaryFetchedRef = useRef(false)
+
   const [authLoading, setAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
   const [authMode, setAuthMode] = useState('signup')
@@ -291,6 +300,29 @@ function App() {
     getDocs(query(collection(db, 'journals', currentUser.uid, 'entries'), orderBy('timestamp', 'desc')))
       .then(snap => setJournalEntries(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
       .catch(e => console.error('[Firestore] Journal tab fetch failed | code:', e.code, '| message:', e.message))
+  }, [navTab, currentUser?.uid]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (navTab !== 'insights') return
+
+    if (currentUser?.uid) {
+      getDocs(query(collection(db, 'moods', currentUser.uid, 'entries'), orderBy('timestamp', 'asc')))
+        .then(snap => setMoodEntries(snap.docs.map(d => d.data())))
+        .catch(e => console.error('[Firestore] Mood entries fetch failed | code:', e.code, '| message:', e.message, e))
+    }
+
+    if (!insightsSummaryFetchedRef.current && journalEntries.length >= 3) {
+      insightsSummaryFetchedRef.current = true
+      setInsightsSummaryLoading(true)
+      const recent = journalEntries.slice(0, 7)
+      const entriesText = recent.map(e => `${e.date || ''}: ${e.text || ''}`).join('\n')
+      callFlutter(FLUTTER_INSIGHTS_SYSTEM, `Here are my recent journal entries:\n${entriesText}`)
+        .then(summary => {
+          setInsightsSummary(summary)
+          setInsightsSummaryLoading(false)
+        })
+        .catch(() => setInsightsSummaryLoading(false))
+    }
   }, [navTab, currentUser?.uid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [lessonFailed, setLessonFailed] = useState(false)
@@ -1053,6 +1085,123 @@ function App() {
     )
   }
 
+  const handleExportPDF = async () => {
+    try {
+      const pdf = new jsPDF()
+      const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      const rawMoods = currentUser ? moodEntries : load('utgl_moodHistory', [])
+      const startMoodVal = rawMoods.length > 0 ? rawMoods[0].value : null
+      const currentMoodVal = rawMoods.length > 0 ? rawMoods[rawMoods.length - 1].value : null
+      let y = 22
+
+      // Cover
+      pdf.setFontSize(22)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Untangle Progress Report', 105, y, { align: 'center' })
+      y += 10
+      pdf.setFontSize(14)
+      pdf.setFont('helvetica', 'normal')
+      if (userName) { pdf.text(userName, 105, y, { align: 'center' }); y += 8 }
+      pdf.setFontSize(11)
+      pdf.text(today, 105, y, { align: 'center' })
+      y += 7
+      pdf.setTextColor(150, 150, 150)
+      pdf.text('Powered by Untangle', 105, y, { align: 'center' })
+      pdf.setTextColor(0, 0, 0)
+      y += 16
+
+      // Section 1: Overview
+      pdf.setFontSize(14)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Overview', 20, y)
+      y += 8
+      pdf.setFontSize(11)
+      pdf.setFont('helvetica', 'normal')
+      const overviewLines = [
+        `Missions completed: ${missionsCompleted}`,
+        `Current streak: ${streak} day${streak !== 1 ? 's' : ''}`,
+        `Total XP: ${xp}`,
+        startMoodVal !== null ? `Starting mood: ${startMoodVal}/10` : null,
+        currentMoodVal !== null ? `Current mood: ${currentMoodVal}/10` : null,
+      ].filter(Boolean)
+      overviewLines.forEach(line => { pdf.text(line, 20, y); y += 7 })
+      y += 8
+
+      // Section 2: Mood trend
+      pdf.setFontSize(14)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Mood Trend', 20, y)
+      y += 8
+      pdf.setFontSize(10)
+      pdf.setFont('helvetica', 'normal')
+      if (rawMoods.length === 0) {
+        pdf.text('No mood check-ins recorded yet.', 20, y)
+        y += 7
+      } else {
+        const trendText = rawMoods.slice(-14).map(e => `${e.date}: ${e.value}/10`).join('  →  ')
+        const wrapped = pdf.splitTextToSize(trendText, 170)
+        pdf.text(wrapped, 20, y)
+        y += wrapped.length * 6 + 4
+      }
+      y += 8
+
+      // Section 3: What Flutter noticed
+      pdf.setFontSize(14)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('What Flutter Noticed', 20, y)
+      y += 8
+      pdf.setFontSize(10)
+      pdf.setFont('helvetica', 'normal')
+      const summaryText = insightsSummary || 'Not enough journal entries yet for a summary.'
+      const summaryLines = pdf.splitTextToSize(summaryText, 170)
+      pdf.text(summaryLines, 20, y)
+      y += summaryLines.length * 6 + 8
+
+      // Section 4: Recent journal entries
+      if (y > 240) { pdf.addPage(); y = 22 }
+      pdf.setFontSize(14)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Recent Journal Entries', 20, y)
+      y += 8
+      pdf.setFontSize(10)
+      const recent = journalEntries.filter(e => e.text).slice(0, 5)
+      if (recent.length === 0) {
+        pdf.setFont('helvetica', 'normal')
+        pdf.text('No journal entries yet.', 20, y)
+      } else {
+        recent.forEach(entry => {
+          if (y > 258) { pdf.addPage(); y = 22 }
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(entry.date || '', 20, y)
+          y += 6
+          pdf.setFont('helvetica', 'normal')
+          const lines = pdf.splitTextToSize(entry.text || '', 170)
+          pdf.text(lines, 20, y)
+          y += lines.length * 6 + 6
+        })
+      }
+
+      // Footer on every page
+      const pageCount = pdf.internal.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i)
+        pdf.setFontSize(8)
+        pdf.setTextColor(150, 150, 150)
+        const footerLines = pdf.splitTextToSize(
+          'This report was generated by Untangle. Untangle is not a substitute for professional mental health care. For support, call or text 988.',
+          170
+        )
+        pdf.text(footerLines, 105, 290, { align: 'center' })
+        pdf.setTextColor(0, 0, 0)
+      }
+
+      pdf.save(`untangle-report-${getTodayStr()}.pdf`)
+    } catch (e) {
+      console.error('[PDF Export] Failed:', e)
+      alert("PDF export isn't available right now. Try again later.")
+    }
+  }
+
   if (screen === 7 && navTab === 'insights' && openLesson) {
     return (
       <>
@@ -1072,22 +1221,25 @@ function App() {
   }
 
   if (screen === 7 && navTab === 'insights') {
-    const moodPoints = [
-      { day: 'Mon', val: 4 },
-      { day: 'Tue', val: 5 },
-      { day: 'Wed', val: 4 },
-      { day: 'Thu', val: 6 },
-      { day: 'Fri', val: 7 },
-      { day: 'Sat', val: 7 },
-      { day: 'Sun', val: 8 },
-    ]
-    const moodMax = 10
+    const rawMoodEntries = currentUser ? moodEntries : load('utgl_moodHistory', [])
+    const last14 = rawMoodEntries.slice(-14)
+    const moodPoints = last14.map(e => ({
+      label: e.date ? e.date.slice(5).replace('-', '/') : '',
+      val: e.value,
+    }))
+    const startMoodVal = moodPoints.length > 0 ? moodPoints[0].val : null
+    const currentMoodVal = moodPoints.length > 0 ? moodPoints[moodPoints.length - 1].val : null
+    const moodDelta = startMoodVal !== null && currentMoodVal !== null
+      ? +(currentMoodVal - startMoodVal).toFixed(1)
+      : null
+    const moodCheckInCount = currentUser ? moodEntries.length : load('utgl_moodHistory', []).length
+
     const badges = [
-      { label: 'First Day', icon: '✅', earned: missionsCompleted >= 1 },
-      { label: 'Week Warrior', icon: '🔥', earned: streak >= 7 },
-      { label: 'Courage Builder', icon: '⭐', earned: missionsCompleted >= 5 },
-      { label: '30-Day Legend', icon: '🦋', earned: missionsCompleted >= 30 },
-      { label: 'Zen Master', icon: '🧘', earned: xp >= 500 },
+      { label: 'First Day',      icon: '✅', earned: missionsCompleted >= 1  },
+      { label: 'Week Warrior',   icon: '🔥', earned: streak >= 7             },
+      { label: 'Courage Builder',icon: '⭐', earned: missionsCompleted >= 5  },
+      { label: '30-Day Legend',  icon: '🦋', earned: missionsCompleted >= 30 },
+      { label: 'Zen Master',     icon: '🧘', earned: xp >= 500              },
     ]
     return (
       <>
@@ -1144,57 +1296,83 @@ function App() {
               </div>
             </div>
 
-            {/* ── Insights & Data ── */}
+            {/* ── Mood trend ── */}
             <div className="h-card">
               <p className="h-card-label">Mood trend</p>
-              <div className="ins-mood-change">
-                <span className="ins-mood-stat"><span className="ins-mood-num">4</span><span className="ins-mood-meta">start</span></span>
-                <span className="ins-mood-arrow">→</span>
-                <span className="ins-mood-stat"><span className="ins-mood-num ins-mood-num--up">8</span><span className="ins-mood-meta">today</span></span>
-                <span className="ins-mood-delta">+4 ↑</span>
-              </div>
-              <div className="ins-chart">
-                {moodPoints.map(p => (
-                  <div key={p.day} className="ins-chart-col">
-                    <div className="ins-bar-wrap">
-                      <div
-                        className="ins-bar"
-                        style={{ height: `${(p.val / moodMax) * 100}%` }}
-                      />
-                    </div>
-                    <span className="ins-chart-day">{p.day}</span>
+              {moodPoints.length < 2 ? (
+                <p className="h-card-body">Check in daily to see your mood trend</p>
+              ) : (
+                <>
+                  <div className="ins-mood-change">
+                    <span className="ins-mood-stat">
+                      <span className="ins-mood-num">{startMoodVal}</span>
+                      <span className="ins-mood-meta">start</span>
+                    </span>
+                    <span className="ins-mood-arrow">→</span>
+                    <span className="ins-mood-stat">
+                      <span className={`ins-mood-num${moodDelta !== null && moodDelta >= 0 ? ' ins-mood-num--up' : ''}`}>{currentMoodVal}</span>
+                      <span className="ins-mood-meta">today</span>
+                    </span>
+                    {moodDelta !== null && (
+                      <span className="ins-mood-delta">
+                        {moodDelta >= 0 ? `↑ +${moodDelta}` : `↓ ${moodDelta}`} since you started
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <ResponsiveContainer width="100%" height={120}>
+                    <LineChart data={moodPoints} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                      <YAxis domain={[1, 10]} hide />
+                      <Tooltip formatter={(v) => [`${v}/10`, 'Mood']} />
+                      <Line
+                        type="monotone"
+                        dataKey="val"
+                        stroke="#7c3aed"
+                        strokeWidth={2}
+                        dot={{ fill: '#7c3aed', r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </>
+              )}
             </div>
 
+            {/* ── Stats ── */}
             <div className="h-card">
               <p className="h-card-label">Behavior change</p>
               <div className="ins-stats">
                 <div className="ins-stat-row">
-                  <span className="ins-stat-label">Times you said no</span>
-                  <span className="ins-stat-value">7</span>
-                </div>
-                <div className="ins-stat-row">
                   <span className="ins-stat-label">Missions completed</span>
                   <span className="ins-stat-value">{missionsCompleted}</span>
+                </div>
+                <div className="ins-stat-row">
+                  <span className="ins-stat-label">Current streak</span>
+                  <span className="ins-stat-value">{streak} day{streak !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="ins-stat-row">
                   <span className="ins-stat-label">Journal entries</span>
                   <span className="ins-stat-value">{journalEntries.length}</span>
                 </div>
                 <div className="ins-stat-row">
-                  <span className="ins-stat-label">Check-ins logged</span>
-                  <span className="ins-stat-value">6</span>
+                  <span className="ins-stat-label">Mood check-ins</span>
+                  <span className="ins-stat-value">{moodCheckInCount}</span>
                 </div>
               </div>
             </div>
 
+            {/* ── AI journal summary ── */}
             <div className="h-card">
               <p className="h-card-label">What we're noticing</p>
-              <p className="h-card-body">
-                You're most likely to feel better on days you complete your mission early. Your mood has trended up over the week, and you're building a real streak. The hardest moments tend to come mid-week — keep an eye on Wednesday.
-              </p>
+              {insightsSummaryLoading ? (
+                <p className="flutter-thinking">Flutter is noticing patterns…</p>
+              ) : journalEntries.length < 3 ? (
+                <p className="h-card-body">Journal for a few more days and Flutter will start noticing patterns</p>
+              ) : insightsSummary ? (
+                <p className="h-card-body">{insightsSummary}</p>
+              ) : (
+                <p className="h-card-body">Journal for a few more days and Flutter will start noticing patterns</p>
+              )}
             </div>
 
             <div className="h-card">
@@ -1216,7 +1394,7 @@ function App() {
               ))}
             </div>
 
-            <button className="export-btn">Export for therapist</button>
+            <button className="export-btn" onClick={handleExportPDF}>Export for therapist</button>
 
           </div>
         </div>
