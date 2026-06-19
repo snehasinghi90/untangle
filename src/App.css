@@ -737,6 +737,20 @@ h1 {
 
 .logout-link:hover { color: #d94f4f; }
 
+.change-category-link {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #888;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  text-align: center;
+  text-decoration: underline;
+}
+
+.change-category-link:hover { color: #5b4fcf; }
+
 .profile-back { /* legacy — no longer used */ }
 
 .placeholder-title {

@@ -107,6 +107,23 @@ const CATEGORIES = [
   'Something else',
 ]
 
+const getTodayStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const getYesterdayStr = () => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const getButterflyEmoji = count => {
+  if (count >= 30) return '🦋✨'
+  if (count >= 14) return '🦋'
+  if (count >= 7) return '🪱'
+  if (count >= 3) return '🐣'
+  return '🥚'
+}
+
 function App() {
   const [problem, setProblem] = useState(() => load('utgl_problem', ''))
   const [screen, setScreen] = useState(() => load('utgl_screen', 1))
@@ -154,6 +171,19 @@ function App() {
   const [showCompose, setShowCompose] = useState(false)
   const [composeDraft, setComposeDraft] = useState('')
 
+  const [missionsCompleted, setMissionsCompleted] = useState(() => load('utgl_missionsCompleted', 0))
+  const [streak, setStreak] = useState(() => load('utgl_streak', 0))
+  const [lastCompletedDate, setLastCompletedDate] = useState(() => load('utgl_lastCompletedDate', ''))
+  const [xp, setXp] = useState(() => load('utgl_xp', 0))
+  const [completedDates, setCompletedDates] = useState(() => load('utgl_completedDates', []))
+  const [missionSuccess, setMissionSuccess] = useState(false)
+
+  useEffect(() => { save('utgl_missionsCompleted', missionsCompleted) }, [missionsCompleted])
+  useEffect(() => { save('utgl_streak', streak) }, [streak])
+  useEffect(() => { save('utgl_lastCompletedDate', lastCompletedDate) }, [lastCompletedDate])
+  useEffect(() => { save('utgl_xp', xp) }, [xp])
+  useEffect(() => { save('utgl_completedDates', completedDates) }, [completedDates])
+
   const [onboardingAiReply, setOnboardingAiReply] = useState('')
   const [onboardingAiLoading, setOnboardingAiLoading] = useState(false)
   const [journalAiLoading, setJournalAiLoading] = useState(false)
@@ -181,6 +211,63 @@ function App() {
       })
       .catch(() => setLessonFailed(true))
   }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const todayStr = getTodayStr()
+  const alreadyCompletedToday = lastCompletedDate === todayStr
+  const butterflyEmoji = getButterflyEmoji(missionsCompleted)
+
+  const handleMissionComplete = () => {
+    if (alreadyCompletedToday) return
+    const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
+    setMissionsCompleted(prev => prev + 1)
+    setXp(prev => prev + 10)
+    setStreak(newStreak)
+    setLastCompletedDate(todayStr)
+    setCompletedDates(prev => prev.includes(todayStr) ? prev : [...prev, todayStr])
+    setMissionSuccess(true)
+    setTimeout(() => setMissionSuccess(false), 2000)
+  }
+
+  const handleLogout = () => {
+    if (!window.confirm('Are you sure? This will reset your progress.')) return
+    localStorage.clear()
+    setScreen(1)
+    setProblem('')
+    setSelected(null)
+    setButterflyName('')
+    setUserName('')
+    setFeeling(5)
+    setMission(null)
+    setLesson(null)
+    setLessonFailed(false)
+    setMissionsCompleted(0)
+    setStreak(0)
+    setLastCompletedDate('')
+    setXp(0)
+    setCompletedDates([])
+    setJournalEntries(PLACEHOLDER_ENTRIES)
+    setOnboardingAiReply('')
+    setShowProfile(false)
+    setNavTab('home')
+  }
+
+  const handleChangeCategory = () => {
+    if (!window.confirm('This will reset your focus area, mission, and progress. Your name and butterfly will be kept.')) return
+    localStorage.removeItem('utgl_mission')
+    localStorage.removeItem('utgl_lesson')
+    setSelected(null)
+    setMission(null)
+    setLesson(null)
+    setLessonFailed(false)
+    setMissionsCompleted(0)
+    setStreak(0)
+    setLastCompletedDate('')
+    setXp(0)
+    setCompletedDates([])
+    setProblem('')
+    setScreen(2)
+    setShowProfile(false)
+  }
 
   const BottomNav = () => (
     <nav className="nav-bar">
@@ -291,7 +378,7 @@ function App() {
           <div className="h-card">
             <p className="h-card-label">Your butterfly</p>
             <div className="profile-butterfly-row">
-              <span className="profile-egg">🥚</span>
+              <span className="profile-egg">{butterflyEmoji}</span>
               <div>
                 <p className="profile-bname">{butterflyName}</p>
                 <p className="profile-bstage">Stage 1 — Egg &nbsp;·&nbsp; Day 1 of 30</p>
@@ -350,7 +437,8 @@ function App() {
             </p>
           </div>
 
-          <button className="logout-link">Log out</button>
+          <button className="change-category-link" onClick={handleChangeCategory}>Change my focus area</button>
+          <button className="logout-link" onClick={handleLogout}>Log out</button>
 
         </div>
       </div>
@@ -554,11 +642,11 @@ function App() {
     ]
     const moodMax = 10
     const badges = [
-      { label: 'First Day', icon: '✅', earned: true },
-      { label: 'Week Warrior', icon: '✅', earned: true },
-      { label: 'Courage Builder', icon: '⭐', earned: true },
-      { label: '30-Day Legend', icon: '🔒', earned: false },
-      { label: 'Zen Master', icon: '🔒', earned: false },
+      { label: 'First Day', icon: '✅', earned: missionsCompleted >= 1 },
+      { label: 'Week Warrior', icon: '🔥', earned: streak >= 7 },
+      { label: 'Courage Builder', icon: '⭐', earned: missionsCompleted >= 5 },
+      { label: '30-Day Legend', icon: '🦋', earned: missionsCompleted >= 30 },
+      { label: 'Zen Master', icon: '🧘', earned: xp >= 500 },
     ]
     return (
       <>
@@ -573,22 +661,31 @@ function App() {
             {/* ── Progress & Gamification ── */}
             <div className="ins-row">
               <div className="h-card ins-streak-card ins-half">
-                <span className="ins-streak-label">🔥 5 day streak</span>
+                <span className="ins-streak-label">🔥 {streak} day streak</span>
                 <div className="ins-flames ins-flames--compact">
-                  {['M','T','W','T','F','S','S'].map((d, i) => (
-                    <div key={i} className="ins-flame-col">
-                      <span className={`ins-flame ins-flame--sm${i < 5 ? '' : ' ins-flame--dim'}`}>🔥</span>
-                      <span className="ins-flame-day">{d}</span>
-                    </div>
-                  ))}
+                  {['M','T','W','T','F','S','S'].map((d, i) => {
+                    const dayOfWeek = new Date().getDay()
+                    const todayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+                    const diff = i - todayIdx
+                    const date = new Date()
+                    date.setDate(date.getDate() + diff)
+                    const ds = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+                    const lit = completedDates.includes(ds)
+                    return (
+                      <div key={i} className="ins-flame-col">
+                        <span className={`ins-flame ins-flame--sm${lit ? '' : ' ins-flame--dim'}`}>🔥</span>
+                        <span className="ins-flame-day">{d}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
               <div className="h-card ins-xp-card ins-half">
                 <p className="ins-xp-label">⚡ XP</p>
-                <p className="ins-xp-value">245</p>
+                <p className="ins-xp-value">{xp}</p>
                 <div className="ins-xp-bar-track">
-                  <div className="ins-xp-bar-fill" style={{ width: '49%' }} />
+                  <div className="ins-xp-bar-fill" style={{ width: `${Math.min((xp % 500) / 500 * 100, 100)}%` }} />
                 </div>
                 <p className="ins-xp-sub">/ 500 next level</p>
               </div>
@@ -599,7 +696,7 @@ function App() {
               <div className="ins-badges">
                 {badges.map(b => (
                   <div key={b.label} className={`ins-badge${b.earned ? '' : ' ins-badge--locked'}`}>
-                    <span className="ins-badge-icon">{b.icon}</span>
+                    <span className="ins-badge-icon">{b.earned ? b.icon : '🔒'}</span>
                     <span className="ins-badge-label">{b.label}</span>
                   </div>
                 ))}
@@ -639,7 +736,7 @@ function App() {
                 </div>
                 <div className="ins-stat-row">
                   <span className="ins-stat-label">Missions completed</span>
-                  <span className="ins-stat-value">5</span>
+                  <span className="ins-stat-value">{missionsCompleted}</span>
                 </div>
                 <div className="ins-stat-row">
                   <span className="ins-stat-label">Journal entries</span>
@@ -706,7 +803,7 @@ function App() {
 
           <div className="home-header">
             <div className="home-header-top">
-              <span className="home-name">Hi, {userName}! 🥚</span>
+              <span className="home-name">Hi, {userName}! {butterflyEmoji}</span>
               <div className="home-header-right">
                 <span className="home-day-badge">Day 1</span>
                 <button className="profile-icon" onClick={() => setShowProfile(true)}>👤</button>
@@ -718,9 +815,9 @@ function App() {
           <div className="home-cards">
 
             <div className="h-card h-card--center">
-              <div className="h-butterfly">🥚</div>
+              <div className="h-butterfly">{butterflyEmoji}</div>
               <p className="h-butterfly-name">{butterflyName}</p>
-              <p className="h-progress">1/30 days</p>
+              <p className="h-progress">{missionsCompleted}/30 missions</p>
             </div>
 
             <div className="h-card">
@@ -755,7 +852,14 @@ function App() {
                       </div>
                     ))}
                   </div>
-                  <button className="h-btn h-btn--gold">✅ I Did The Steps!</button>
+                  <button
+                    className="h-btn h-btn--gold"
+                    onClick={handleMissionComplete}
+                    disabled={alreadyCompletedToday}
+                  >
+                    {alreadyCompletedToday ? '✅ Done for today!' : '✅ I Did The Steps!'}
+                  </button>
+                  {missionSuccess && <p className="flutter-thinking">🎉 Great work! Keep going.</p>}
                   <button className="h-btn h-btn--red">🔥 I'm Doing It RIGHT NOW!</button>
                 </>
               )}
