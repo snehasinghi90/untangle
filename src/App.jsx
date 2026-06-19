@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import './App.css'
-import { db, auth } from './firebase'
-import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
+import { db, auth, googleProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase'
+import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, increment, serverTimestamp, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore'
 
 const NAV_ITEMS = [
   { id: 'home',      emoji: '🏠', label: 'Home' },
@@ -79,6 +79,16 @@ const FLUTTER_LESSON_SYSTEM = 'You are Flutter. Based on the user\'s specific si
 const FLUTTER_RIGHT_NOW_SYSTEM = "You are Flutter. The user is in a real moment right now — they're about to do something hard that goes against their people-pleasing pattern. They need immediate, grounding support in 3 sentences maximum.\n\nSentence 1: Acknowledge what's happening in their body right now (chest tight, heart racing, urge to say yes) — make them feel seen.\nSentence 2: Give them one concrete thing to do in the next 10 seconds (take a breath, don't answer on the first ring, say 'let me think about it').\nSentence 3: Remind them they're not alone and they've been building to this moment.\n\nNever be generic. Reference their specific situation and mission. Be warm, human, and brief. No platitudes."
 
 const RIGHT_NOW_FALLBACK = "You've been preparing for exactly this. Whatever you're about to do — you're ready. Take one breath. You know what to say."
+
+function getAuthErrorMessage(code) {
+  if (['auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code))
+    return 'Incorrect email or password. Try again.'
+  if (code === 'auth/email-already-in-use') return 'Account already exists. Try signing in instead.'
+  if (code === 'auth/weak-password') return 'Password must be at least 6 characters.'
+  if (code === 'auth/popup-blocked') return 'Please allow popups for this site and try again.'
+  if (code === 'auth/network-request-failed') return 'Connection issue. Check your internet and try again.'
+  return 'Something went wrong. Please try again.'
+}
 
 const DEFAULT_MISSION = {
   title: 'Notice when you say yes',
@@ -190,11 +200,75 @@ function App() {
   const [rightNowDidIt, setRightNowDidIt] = useState(false)
   const [rightNowXpFlash, setRightNowXpFlash] = useState(false)
 
+  const [authLoading, setAuthLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [authMode, setAuthMode] = useState('signup')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+
   useEffect(() => { save('utgl_missionsCompleted', missionsCompleted) }, [missionsCompleted])
   useEffect(() => { save('utgl_streak', streak) }, [streak])
   useEffect(() => { save('utgl_lastCompletedDate', lastCompletedDate) }, [lastCompletedDate])
   useEffect(() => { save('utgl_xp', xp) }, [xp])
   useEffect(() => { save('utgl_completedDates', completedDates) }, [completedDates])
+
+  const loadUserAndRoute = async (user) => {
+    const [userSnap, progressSnap] = await Promise.all([
+      getDoc(doc(db, 'users', user.uid)),
+      getDoc(doc(db, 'progress', user.uid)),
+    ])
+    if (userSnap.exists()) {
+      const u = userSnap.data()
+      if (u.userName)         setUserName(u.userName)
+      if (u.butterflyName)    setButterflyName(u.butterflyName)
+      if (u.selectedCategory) setSelected(u.selectedCategory)
+      if (u.problem)          setProblem(u.problem)
+      if (user.email)         setProfileEmail(user.email)
+    }
+    if (progressSnap.exists()) {
+      const p = progressSnap.data()
+      setMissionsCompleted(p.missionsCompleted ?? 0)
+      setStreak(p.streak ?? 0)
+      setXp(p.xp ?? 0)
+      setLastCompletedDate(p.lastCompletedDate ?? '')
+      setCompletedDates(p.completedDates ?? [])
+    }
+    if (userSnap.exists()) {
+      const journalSnap = await getDocs(
+        query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
+      )
+      if (!journalSnap.empty) {
+        setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+      }
+      setMoodCheckedIn(load('utgl_moodCheckedInDate', '') === getTodayStr())
+      setScreen(4)
+    } else {
+      setScreen(2)
+    }
+  }
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setCurrentUser(null)
+        setScreen(1)
+        setAuthLoading(false)
+        return
+      }
+      setCurrentUser(user)
+      try {
+        await loadUserAndRoute(user)
+      } catch (e) {
+        console.error('Auth load error:', e)
+        setScreen(1)
+      } finally {
+        setAuthLoading(false)
+      }
+    })
+    return unsub
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [onboardingAiReply, setOnboardingAiReply] = useState('')
   const [onboardingAiLoading, setOnboardingAiLoading] = useState(false)
@@ -231,18 +305,28 @@ function App() {
   const handleMissionComplete = () => {
     if (alreadyCompletedToday) return
     const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
-    setMissionsCompleted(prev => prev + 1)
-    setXp(prev => prev + 10)
+    const newMC = missionsCompleted + 1
+    const newXp = xp + 10
+    const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
+    setMissionsCompleted(newMC)
+    setXp(newXp)
     setStreak(newStreak)
     setLastCompletedDate(todayStr)
-    setCompletedDates(prev => prev.includes(todayStr) ? prev : [...prev, todayStr])
+    setCompletedDates(newDates)
     setMissionSuccess(true)
     setTimeout(() => setMissionSuccess(false), 2000)
+    if (currentUser) {
+      setDoc(doc(db, 'progress', currentUser.uid), {
+        missionsCompleted: newMC, streak: newStreak, xp: newXp,
+        lastCompletedDate: todayStr, completedDates: newDates,
+      }, { merge: true }).catch(console.error)
+    }
   }
 
-  const handleLogout = () => {
-    if (!window.confirm('Are you sure? This will reset your progress.')) return
+  const handleLogout = async () => {
+    await signOut(auth)
     localStorage.clear()
+    setCurrentUser(null)
     setScreen(1)
     setProblem('')
     setSelected(null)
@@ -261,9 +345,13 @@ function App() {
     setOnboardingAiReply('')
     setShowProfile(false)
     setNavTab('home')
+    setAuthMode('signup')
+    setAuthEmail('')
+    setAuthPassword('')
+    setAuthError('')
   }
 
-  const handleChangeCategory = () => {
+  const handleChangeCategory = async () => {
     if (!window.confirm('This will reset your focus area, mission, and progress. Your name and butterfly will be kept.')) return
     localStorage.removeItem('utgl_mission')
     localStorage.removeItem('utgl_lesson')
@@ -279,6 +367,11 @@ function App() {
     setProblem('')
     setScreen(2)
     setShowProfile(false)
+    if (currentUser) {
+      setDoc(doc(db, 'progress', currentUser.uid), {
+        missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+      }, { merge: true }).catch(console.error)
+    }
   }
 
   const handleMoodCheckin = () => {
@@ -288,6 +381,11 @@ function App() {
     save('utgl_moodHistory', updated)
     save('utgl_moodCheckedInDate', todayStr)
     setMoodCheckedIn(true)
+    if (currentUser) {
+      addDoc(collection(db, 'moods', currentUser.uid, 'entries'), {
+        value: feeling, date: todayStr, timestamp: serverTimestamp(),
+      }).catch(console.error)
+    }
   }
 
   const handleRightNowOpen = () => {
@@ -313,13 +411,22 @@ function App() {
   const handleRightNowDidIt = () => {
     if (rightNowDidIt) return
     setRightNowDidIt(true)
-    const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : (lastCompletedDate === todayStr ? streak : 1)
     if (lastCompletedDate !== todayStr) {
-      setMissionsCompleted(prev => prev + 1)
-      setXp(prev => prev + 10)
+      const newStreak = lastCompletedDate === getYesterdayStr() ? streak + 1 : 1
+      const newMC = missionsCompleted + 1
+      const newXp = xp + 10
+      const newDates = completedDates.includes(todayStr) ? completedDates : [...completedDates, todayStr]
+      setMissionsCompleted(newMC)
+      setXp(newXp)
       setStreak(newStreak)
       setLastCompletedDate(todayStr)
-      setCompletedDates(prev => prev.includes(todayStr) ? prev : [...prev, todayStr])
+      setCompletedDates(newDates)
+      if (currentUser) {
+        setDoc(doc(db, 'progress', currentUser.uid), {
+          missionsCompleted: newMC, streak: newStreak, xp: newXp,
+          lastCompletedDate: todayStr, completedDates: newDates,
+        }, { merge: true }).catch(console.error)
+      }
     }
     setRightNowXpFlash(true)
     setTimeout(() => {
@@ -327,6 +434,47 @@ function App() {
       setRightNowXpFlash(false)
       setRightNowDidIt(false)
     }, 2000)
+  }
+
+  const handleGoogleAuth = async () => {
+    setAuthError('')
+    setAuthSubmitting(true)
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const user = result.user
+      setCurrentUser(user)
+      if (user.displayName) setUserName(user.displayName.split(' ')[0])
+      await loadUserAndRoute(user)
+    } catch (e) {
+      setAuthError(getAuthErrorMessage(e.code))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  const handleEmailAuth = async () => {
+    if (!authEmail.trim() || authPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters.')
+      return
+    }
+    setAuthError('')
+    setAuthSubmitting(true)
+    try {
+      if (authMode === 'signup') {
+        const result = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword)
+        setCurrentUser(result.user)
+        setProfileEmail(result.user.email || '')
+        setScreen(2)
+      } else {
+        const result = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword)
+        setCurrentUser(result.user)
+        await loadUserAndRoute(result.user)
+      }
+    } catch (e) {
+      setAuthError(getAuthErrorMessage(e.code))
+    } finally {
+      setAuthSubmitting(false)
+    }
   }
 
   const BottomNav = () => (
@@ -343,6 +491,15 @@ function App() {
       ))}
     </nav>
   )
+
+  if (authLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-butterfly">🦋</div>
+        <p className="auth-loading-text">Loading...</p>
+      </div>
+    )
+  }
 
   if (screen === 4 && showProfile) {
     const initials = userName.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
@@ -515,10 +672,17 @@ function App() {
       setJournalDraft('')
       setExpandedEntry(0)
       setJournalAiLoading(true)
+      let firestoreRef = null
+      if (currentUser) {
+        firestoreRef = await addDoc(collection(db, 'journals', currentUser.uid, 'entries'), {
+          text, date: label, flutterReply: null, timestamp: serverTimestamp(),
+        }).catch(console.error)
+      }
       try {
         const reply = await callFlutter(FLUTTER_JOURNAL_SYSTEM, text)
         if (reply) {
           setJournalEntries(prev => prev.map((e, i) => i === 0 ? { ...e, flutterReply: reply } : e))
+          if (firestoreRef) updateDoc(firestoreRef, { flutterReply: reply }).catch(console.error)
         }
       } catch {
         // fail silently
@@ -565,7 +729,14 @@ function App() {
                       <span className="entry-chevron">{expandedEntry === i ? '▲' : '▼'}</span>
                       <button
                         className="entry-delete-btn"
-                        onClick={e => { e.stopPropagation(); setJournalEntries(prev => prev.filter((_, j) => j !== i)) }}
+                        onClick={e => {
+                          e.stopPropagation()
+                          const entry = journalEntries[i]
+                          if (entry.id && currentUser) {
+                            deleteDoc(doc(db, 'journals', currentUser.uid, 'entries', entry.id)).catch(console.error)
+                          }
+                          setJournalEntries(prev => prev.filter((_, j) => j !== i))
+                        }}
                         aria-label="Delete entry"
                       >
                         🗑
@@ -1041,6 +1212,21 @@ function App() {
           className="next-button"
           disabled={!butterflyName.trim() || !userName.trim()}
           onClick={async () => {
+            if (currentUser) {
+              await Promise.all([
+                setDoc(doc(db, 'users', currentUser.uid), {
+                  userName: userName.trim(),
+                  butterflyName: butterflyName.trim(),
+                  selectedCategory: selected,
+                  problem,
+                  createdAt: serverTimestamp(),
+                  lastActive: serverTimestamp(),
+                }, { merge: true }),
+                setDoc(doc(db, 'progress', currentUser.uid), {
+                  missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+                }, { merge: true }),
+              ]).catch(console.error)
+            }
             setScreen(4)
             const needsMission = mission === null
             const needsLesson = lesson === null
@@ -1103,65 +1289,61 @@ function App() {
     )
   }
 
-  const handleOnboardingNext = async () => {
-    if (!problem.trim()) { setScreen(2); return }
-    setOnboardingAiLoading(true)
-    try {
-      const reply = await callFlutter(FLUTTER_ONBOARDING_SYSTEM, problem)
-      if (reply) {
-        setOnboardingAiReply(reply)
-        const match = CATEGORIES.find(c => reply.includes(c))
-        if (match) setSelected(match)
-      } else {
-        setScreen(2)
-      }
-    } catch {
-      setScreen(2)
-    } finally {
-      setOnboardingAiLoading(false)
-    }
-  }
-
   return (
     <div className="onboarding">
       <div className="logo">🦋</div>
       <h1>Untangle</h1>
       <p className="tagline">Change your life. Feel less alone.</p>
 
-      {onboardingAiLoading ? (
-        <p className="flutter-thinking flutter-thinking--center">Flutter is thinking…</p>
-      ) : onboardingAiReply ? (
-        <>
-          <div className="onboarding-reply-card">
-            <p className="flutter-name">🦋 Flutter</p>
-            <p className="onboarding-reply-text">
-              {(() => {
-                const cat = CATEGORIES.find(c => onboardingAiReply.includes(c))
-                if (!cat) return onboardingAiReply
-                const idx = onboardingAiReply.indexOf(cat)
-                return <>{onboardingAiReply.slice(0, idx)}<strong>{cat}</strong>{onboardingAiReply.slice(idx + cat.length)}</>
-              })()}
-            </p>
-          </div>
-          <button className="next-button" onClick={() => setScreen(2)}>
-            Continue →
-          </button>
-        </>
-      ) : (
-        <>
-          <label className="question">Hi! What's going on today?</label>
-          <textarea
-            className="problem-input"
-            value={problem}
-            onChange={(e) => setProblem(e.target.value)}
-            placeholder="I can't say no to people, even when I'm exhausted..."
-            rows="4"
-          />
-          <button className="next-button" onClick={handleOnboardingNext}>
-            Next →
-          </button>
-        </>
+      {authMode === 'signup' && (
+        <button
+          className="auth-google-btn"
+          onClick={handleGoogleAuth}
+          disabled={authSubmitting}
+        >
+          <span className="auth-google-g">G</span>
+          Continue with Google
+        </button>
       )}
+
+      {authMode === 'signup' && <div className="auth-divider"><span>or</span></div>}
+
+      <input
+        className="name-input auth-field"
+        type="email"
+        value={authEmail}
+        onChange={e => { setAuthEmail(e.target.value); setAuthError('') }}
+        placeholder="Email address"
+        autoComplete="email"
+      />
+      <input
+        className="name-input auth-field"
+        type="password"
+        value={authPassword}
+        onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
+        placeholder="Password (min 6 characters)"
+        autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+        onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
+      />
+
+      {authError && <p className="auth-error">{authError}</p>}
+
+      <button
+        className={authMode === 'signup' ? 'auth-submit-btn' : 'next-button'}
+        onClick={handleEmailAuth}
+        disabled={authSubmitting || !authEmail.trim() || !authPassword}
+      >
+        {authSubmitting ? '...' : authMode === 'signup' ? 'Create account' : 'Sign in'}
+      </button>
+
+      <button
+        className="auth-toggle-link"
+        onClick={() => { setAuthMode(authMode === 'signup' ? 'signin' : 'signup'); setAuthError('') }}
+      >
+        {authMode === 'signup'
+          ? 'Already have an account? Sign in →'
+          : "Don't have an account? Sign up →"}
+      </button>
     </div>
   )
 }
