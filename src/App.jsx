@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import './App.css'
 import { db, auth, googleProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase'
 import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, increment, serverTimestamp, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore'
@@ -203,11 +203,13 @@ function App() {
 
   const [authLoading, setAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
+  const [showReturnLogin, setShowReturnLogin] = useState(false)
   const [authMode, setAuthMode] = useState('signup')
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
+  const authInitialized = useRef(false)
 
   useEffect(() => { save('utgl_missionsCompleted', missionsCompleted) }, [missionsCompleted])
   useEffect(() => { save('utgl_streak', streak) }, [streak])
@@ -244,17 +246,25 @@ function App() {
         setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
       }
       setMoodCheckedIn(load('utgl_moodCheckedInDate', '') === getTodayStr())
-      setScreen(4)
+      setScreen(6)
     } else {
-      setScreen(2)
+      setScreen(1)
     }
   }
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
+      if (authInitialized.current) return
+      authInitialized.current = true
       if (!user) {
         setCurrentUser(null)
-        setScreen(1)
+        const hadAccount = load('utgl_hadAccount', false)
+        if (hadAccount) {
+          setAuthMode('signin')
+          setShowReturnLogin(true)
+        } else {
+          setScreen(1)
+        }
         setAuthLoading(false)
         return
       }
@@ -285,7 +295,7 @@ function App() {
   const [lessonFailed, setLessonFailed] = useState(false)
 
   useEffect(() => {
-    if (screen !== 4 || lesson !== null || !selected) return
+    if (screen !== 6 || lesson !== null || !selected) return
     const ctx = problem
       ? `My situation: ${problem}. I'm working on: ${selected}.`
       : `I'm working on: ${selected}.`
@@ -327,7 +337,9 @@ function App() {
   const handleLogout = async () => {
     await signOut(auth)
     localStorage.clear()
+    save('utgl_hadAccount', false)
     setCurrentUser(null)
+    setShowReturnLogin(false)
     setScreen(1)
     setProblem('')
     setSelected(null)
@@ -366,7 +378,7 @@ function App() {
     setXp(0)
     setCompletedDates([])
     setProblem('')
-    setScreen(2)
+    setScreen(3)
     setShowProfile(false)
     if (currentUser) {
       setDoc(doc(db, 'progress', currentUser.uid), {
@@ -444,8 +456,49 @@ function App() {
       const result = await signInWithPopup(auth, googleProvider)
       const user = result.user
       setCurrentUser(user)
-      if (user.displayName) setUserName(user.displayName.split(' ')[0])
-      await loadUserAndRoute(user)
+      const userSnap = await getDoc(doc(db, 'users', user.uid))
+      if (userSnap.exists()) {
+        const u = userSnap.data()
+        if (u.userName)         setUserName(u.userName)
+        if (u.butterflyName)    setButterflyName(u.butterflyName)
+        if (u.selectedCategory) setSelected(u.selectedCategory)
+        if (u.problem)          setProblem(u.problem)
+        if (user.email)         setProfileEmail(user.email)
+        const progressSnap = await getDoc(doc(db, 'progress', user.uid))
+        if (progressSnap.exists()) {
+          const p = progressSnap.data()
+          setMissionsCompleted(p.missionsCompleted ?? 0)
+          setStreak(p.streak ?? 0)
+          setXp(p.xp ?? 0)
+          setLastCompletedDate(p.lastCompletedDate ?? '')
+          setCompletedDates(p.completedDates ?? [])
+        }
+        const journalSnap = await getDocs(
+          query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
+        )
+        if (!journalSnap.empty) {
+          setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        }
+      } else {
+        const nameToUse = userName.trim() || user.displayName?.split(' ')[0] || ''
+        if (nameToUse) setUserName(nameToUse)
+        await Promise.all([
+          setDoc(doc(db, 'users', user.uid), {
+            userName: nameToUse,
+            butterflyName: butterflyName.trim(),
+            selectedCategory: selected,
+            problem,
+            createdAt: serverTimestamp(),
+            lastActive: serverTimestamp(),
+          }),
+          setDoc(doc(db, 'progress', user.uid), {
+            missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+          }),
+        ])
+      }
+      save('utgl_hadAccount', true)
+      setShowReturnLogin(false)
+      setScreen(6)
     } catch (e) {
       setAuthError(getAuthErrorMessage(e.code))
     } finally {
@@ -465,16 +518,52 @@ function App() {
         const result = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword)
         setCurrentUser(result.user)
         setProfileEmail(result.user.email || '')
-        setScreen(2)
+        await Promise.all([
+          setDoc(doc(db, 'users', result.user.uid), {
+            userName: userName.trim(),
+            butterflyName: butterflyName.trim(),
+            selectedCategory: selected,
+            problem,
+            createdAt: serverTimestamp(),
+            lastActive: serverTimestamp(),
+          }),
+          setDoc(doc(db, 'progress', result.user.uid), {
+            missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
+          }),
+        ])
+        save('utgl_hadAccount', true)
+        setScreen(6)
       } else {
         const result = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword)
         setCurrentUser(result.user)
         await loadUserAndRoute(result.user)
+        save('utgl_hadAccount', true)
+        setShowReturnLogin(false)
       }
     } catch (e) {
       setAuthError(getAuthErrorMessage(e.code))
     } finally {
       setAuthSubmitting(false)
+    }
+  }
+
+  const handleOnboardingNext = async () => {
+    if (!problem.trim()) { setScreen(3); return }
+    setScreen(2)
+    setOnboardingAiLoading(true)
+    try {
+      const reply = await callFlutter(FLUTTER_ONBOARDING_SYSTEM, problem)
+      if (reply) {
+        setOnboardingAiReply(reply)
+        const match = CATEGORIES.find(c => reply.includes(c))
+        if (match) setSelected(match)
+      } else {
+        setScreen(3)
+      }
+    } catch {
+      setScreen(3)
+    } finally {
+      setOnboardingAiLoading(false)
     }
   }
 
@@ -502,7 +591,67 @@ function App() {
     )
   }
 
-  if (screen === 4 && showProfile) {
+  if (showReturnLogin) {
+    return (
+      <div className="onboarding">
+        <div className="logo">🦋</div>
+        <h1>Welcome back</h1>
+        <p className="tagline" style={{ marginBottom: 32 }}>Sign in to continue your journey.</p>
+
+        <button
+          className="auth-google-btn"
+          onClick={handleGoogleAuth}
+          disabled={authSubmitting}
+        >
+          <span className="auth-google-g">G</span>
+          Continue with Google
+        </button>
+
+        <div className="auth-divider"><span>or</span></div>
+
+        <input
+          className="name-input auth-field"
+          type="email"
+          value={authEmail}
+          onChange={e => { setAuthEmail(e.target.value); setAuthError('') }}
+          placeholder="Email address"
+          autoComplete="email"
+        />
+        <input
+          className="name-input auth-field"
+          type="password"
+          value={authPassword}
+          onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
+          placeholder="Password"
+          autoComplete="current-password"
+          onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
+        />
+
+        {authError && <p className="auth-error">{authError}</p>}
+
+        <button
+          className="next-button"
+          onClick={handleEmailAuth}
+          disabled={authSubmitting || !authEmail.trim() || !authPassword}
+        >
+          {authSubmitting ? '...' : 'Sign in'}
+        </button>
+
+        <button
+          className="auth-toggle-link"
+          onClick={() => {
+            setShowReturnLogin(false)
+            setScreen(1)
+            save('utgl_hadAccount', false)
+          }}
+        >
+          Start fresh →
+        </button>
+      </div>
+    )
+  }
+
+  if (screen === 6 && showProfile) {
     const initials = userName.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
     const pwValid = newPw.length >= 6 && newPw === confirmPw
 
@@ -663,7 +812,7 @@ function App() {
     )
   }
 
-  if (screen === 4 && navTab === 'journal') {
+  if (screen === 6 && navTab === 'journal') {
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     const saveEntry = async () => {
       if (!journalDraft.trim()) return
@@ -770,7 +919,7 @@ function App() {
     )
   }
 
-  if (screen === 4 && navTab === 'community') {
+  if (screen === 6 && navTab === 'community') {
     const submitPost = async () => {
       if (!composeDraft.trim()) return
       await addDoc(collection(db, 'posts'), {
@@ -844,7 +993,7 @@ function App() {
     )
   }
 
-  if (screen === 4 && navTab === 'insights' && openLesson) {
+  if (screen === 6 && navTab === 'insights' && openLesson) {
     return (
       <>
         <div className="lesson-screen">
@@ -862,7 +1011,7 @@ function App() {
     )
   }
 
-  if (screen === 4 && navTab === 'insights') {
+  if (screen === 6 && navTab === 'insights') {
     const moodPoints = [
       { day: 'Mon', val: 4 },
       { day: 'Tue', val: 5 },
@@ -1016,7 +1165,7 @@ function App() {
     )
   }
 
-  if (screen === 4 && navTab !== 'home') {
+  if (screen === 6 && navTab !== 'home') {
     const title = NAV_ITEMS.find(n => n.id === navTab).label
     return (
       <>
@@ -1028,7 +1177,7 @@ function App() {
     )
   }
 
-  if (screen === 4) {
+  if (screen === 6) {
     return (
       <>
         <div className="home">
@@ -1186,10 +1335,10 @@ function App() {
     )
   }
 
-  if (screen === 3) {
+  if (screen === 4) {
     return (
       <div className="onboarding">
-        <button className="back-link" onClick={() => setScreen(2)}>← Back</button>
+        <button className="back-link" onClick={() => setScreen(3)}>← Back</button>
         <div className="logo">🥚</div>
         <h2 className="screen2-title">Name your butterfly</h2>
         <p className="screen2-subtitle">As you grow, so will they.</p>
@@ -1213,22 +1362,7 @@ function App() {
           className="next-button"
           disabled={!butterflyName.trim() || !userName.trim()}
           onClick={async () => {
-            if (currentUser) {
-              await Promise.all([
-                setDoc(doc(db, 'users', currentUser.uid), {
-                  userName: userName.trim(),
-                  butterflyName: butterflyName.trim(),
-                  selectedCategory: selected,
-                  problem,
-                  createdAt: serverTimestamp(),
-                  lastActive: serverTimestamp(),
-                }, { merge: true }),
-                setDoc(doc(db, 'progress', currentUser.uid), {
-                  missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
-                }, { merge: true }),
-              ]).catch(console.error)
-            }
-            setScreen(4)
+            setScreen(5)
             const needsMission = mission === null
             const needsLesson = lesson === null
             if (!needsMission && !needsLesson) return
@@ -1258,16 +1392,16 @@ function App() {
             if (needsMission) setMissionLoading(false)
           }}
         >
-          Let's go
+          Next →
         </button>
       </div>
     )
   }
 
-  if (screen === 2) {
+  if (screen === 3) {
     return (
       <div className="onboarding">
-        <button className="back-link" onClick={() => setScreen(1)}>← Back</button>
+        <button className="back-link" onClick={() => setScreen(onboardingAiReply ? 2 : 1)}>← Back</button>
         <h2 className="screen2-title">Which of these fits?</h2>
         <p className="screen2-subtitle">Pick the one that feels closest.</p>
         <div className="category-list">
@@ -1282,10 +1416,101 @@ function App() {
           ))}
         </div>
         {selected && (
-          <button className="next-button continue-button" onClick={() => setScreen(3)}>
+          <button className="next-button continue-button" onClick={() => setScreen(4)}>
             Continue →
           </button>
         )}
+      </div>
+    )
+  }
+
+  if (screen === 2) {
+    return (
+      <div className="onboarding">
+        <button className="back-link" onClick={() => setScreen(1)}>← Back</button>
+        {onboardingAiLoading ? (
+          <p className="flutter-thinking flutter-thinking--center">Flutter is thinking…</p>
+        ) : onboardingAiReply ? (
+          <>
+            <div className="onboarding-reply-card">
+              <p className="flutter-name">🦋 Flutter</p>
+              <p className="onboarding-reply-text">
+                {(() => {
+                  const cat = CATEGORIES.find(c => onboardingAiReply.includes(c))
+                  if (!cat) return onboardingAiReply
+                  const idx = onboardingAiReply.indexOf(cat)
+                  return <>{onboardingAiReply.slice(0, idx)}<strong>{cat}</strong>{onboardingAiReply.slice(idx + cat.length)}</>
+                })()}
+              </p>
+            </div>
+            <button className="next-button" onClick={() => setScreen(3)}>
+              Continue →
+            </button>
+          </>
+        ) : (
+          <button className="next-button" onClick={() => setScreen(3)}>
+            Choose a category →
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  if (screen === 5) {
+    return (
+      <div className="onboarding">
+        <button className="back-link" onClick={() => setScreen(4)}>← Back</button>
+        <div className="logo">🦋</div>
+        <h2 className="screen2-title">Save your progress</h2>
+        <p className="screen2-subtitle">Create a free account so your journey is saved across all your devices.</p>
+
+        <button
+          className="auth-google-btn"
+          onClick={handleGoogleAuth}
+          disabled={authSubmitting}
+        >
+          <span className="auth-google-g">G</span>
+          Continue with Google
+        </button>
+
+        <div className="auth-divider"><span>or</span></div>
+
+        <input
+          className="name-input auth-field"
+          type="email"
+          value={authEmail}
+          onChange={e => { setAuthEmail(e.target.value); setAuthError('') }}
+          placeholder="Email address"
+          autoComplete="email"
+        />
+        <input
+          className="name-input auth-field"
+          type="password"
+          value={authPassword}
+          onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
+          placeholder="Password (min 6 characters)"
+          autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+          onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
+        />
+
+        {authError && <p className="auth-error">{authError}</p>}
+
+        <button
+          className={authMode === 'signup' ? 'auth-submit-btn' : 'next-button'}
+          onClick={handleEmailAuth}
+          disabled={authSubmitting || !authEmail.trim() || !authPassword}
+        >
+          {authSubmitting ? '...' : authMode === 'signup' ? 'Create account' : 'Sign in'}
+        </button>
+
+        <button
+          className="auth-toggle-link"
+          onClick={() => { setAuthMode(authMode === 'signup' ? 'signin' : 'signup'); setAuthError('') }}
+        >
+          {authMode === 'signup'
+            ? 'Already have an account? Sign in →'
+            : "Don't have an account? Sign up →"}
+        </button>
       </div>
     )
   }
@@ -1296,54 +1521,16 @@ function App() {
       <h1>Untangle</h1>
       <p className="tagline">Change your life. Feel less alone.</p>
 
-      {authMode === 'signup' && (
-        <button
-          className="auth-google-btn"
-          onClick={handleGoogleAuth}
-          disabled={authSubmitting}
-        >
-          <span className="auth-google-g">G</span>
-          Continue with Google
-        </button>
-      )}
-
-      {authMode === 'signup' && <div className="auth-divider"><span>or</span></div>}
-
-      <input
-        className="name-input auth-field"
-        type="email"
-        value={authEmail}
-        onChange={e => { setAuthEmail(e.target.value); setAuthError('') }}
-        placeholder="Email address"
-        autoComplete="email"
+      <label className="question">Hi! What's going on today?</label>
+      <textarea
+        className="problem-input"
+        value={problem}
+        onChange={(e) => setProblem(e.target.value)}
+        placeholder="I can't say no to people, even when I'm exhausted..."
+        rows="4"
       />
-      <input
-        className="name-input auth-field"
-        type="password"
-        value={authPassword}
-        onChange={e => { setAuthPassword(e.target.value); setAuthError('') }}
-        placeholder="Password (min 6 characters)"
-        autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-        onKeyDown={e => e.key === 'Enter' && handleEmailAuth()}
-      />
-
-      {authError && <p className="auth-error">{authError}</p>}
-
-      <button
-        className={authMode === 'signup' ? 'auth-submit-btn' : 'next-button'}
-        onClick={handleEmailAuth}
-        disabled={authSubmitting || !authEmail.trim() || !authPassword}
-      >
-        {authSubmitting ? '...' : authMode === 'signup' ? 'Create account' : 'Sign in'}
-      </button>
-
-      <button
-        className="auth-toggle-link"
-        onClick={() => { setAuthMode(authMode === 'signup' ? 'signin' : 'signup'); setAuthError('') }}
-      >
-        {authMode === 'signup'
-          ? 'Already have an account? Sign in →'
-          : "Don't have an account? Sign up →"}
+      <button className="next-button" onClick={handleOnboardingNext}>
+        Next →
       </button>
     </div>
   )
