@@ -165,6 +165,8 @@ function App() {
   useEffect(() => { if (mission) save('utgl_mission', mission) }, [mission])
   useEffect(() => { if (lesson) save('utgl_lesson', lesson) }, [lesson])
 
+  const [lessonFailed, setLessonFailed] = useState(false)
+
   useEffect(() => {
     if (screen !== 4 || lesson !== null || !selected) return
     const ctx = problem
@@ -175,8 +177,9 @@ function App() {
         const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
         const parsed = JSON.parse(cleaned)
         if (parsed.title && parsed.body) setLesson(parsed)
+        else setLessonFailed(true)
       })
-      .catch(() => {})
+      .catch(() => setLessonFailed(true))
   }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const BottomNav = () => (
@@ -722,10 +725,19 @@ function App() {
 
             <div className="h-card">
               <p className="h-card-label">📚 Today's Lesson</p>
-              <p className="h-card-title">{lesson?.title || "Today's Lesson"}</p>
-              <p className="h-card-body">
-                {lesson?.body || "People-pleasing often starts as a survival strategy — a way to stay safe, liked, or needed. Understanding the root helps you respond differently next time."}
-              </p>
+              {lesson ? (
+                <>
+                  <p className="h-card-title">{lesson.title}</p>
+                  <p className="h-card-body">{lesson.body}</p>
+                </>
+              ) : lessonFailed ? (
+                <>
+                  <p className="h-card-title">Today's Lesson</p>
+                  <p className="h-card-body">Your personalized lesson will be ready next time you open the app.</p>
+                </>
+              ) : (
+                <p className="flutter-thinking">Loading your lesson…</p>
+              )}
             </div>
 
             <div className="h-card h-card--mission">
