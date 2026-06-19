@@ -68,7 +68,7 @@ function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
-const FLUTTER_ONBOARDING_SYSTEM = "You are Flutter, a warm and supportive mental health companion. The user has just shared what's bothering them. Respond in 2 sentences maximum: first acknowledge what they shared with genuine empathy, then say you'd like to understand better. Be warm, never clinical. Never mention therapy or diagnosis."
+const FLUTTER_ONBOARDING_SYSTEM = "You are Flutter, a warm and supportive mental health companion. The user has just shared what's bothering them. Respond in 3 sentences maximum: first acknowledge what they shared with genuine empathy, then say you'd like to understand better, then end with exactly one sentence suggesting the most relevant category from this list: People-pleasing, Self-comparison, Perfectionism, Time management. The final sentence must follow this format: \"Based on what you shared, it sounds like [category] might be the place to start.\" Be warm, never clinical. Never mention therapy or diagnosis."
 
 const FLUTTER_JOURNAL_SYSTEM = "You are Flutter, a warm mental health companion using Adlerian psychology. When a user shares a journal entry, do two things in under 4 sentences: ask ONE specific follow-up question about what they wrote, then offer a brief Adlerian reframe focused on courage and growth (not thought-challenging). Be warm and human. Never mention therapy, diagnosis, or that you are an AI. End with the question. If anything suggests a crisis, respond only with: 'It sounds like you might be going through something really hard. Please reach out to the 988 Suicide and Crisis Lifeline by calling or texting 988.'"
 
@@ -141,8 +141,8 @@ function App() {
 
   const [onboardingAiReply, setOnboardingAiReply] = useState('')
   const [onboardingAiLoading, setOnboardingAiLoading] = useState(false)
-  const [journalAiReply, setJournalAiReply] = useState('')
   const [journalAiLoading, setJournalAiLoading] = useState(false)
+  const [expandedEntry, setExpandedEntry] = useState(null)
 
   const missionSteps = [
     'Pause before you respond to a request',
@@ -332,13 +332,15 @@ function App() {
       if (!journalDraft.trim()) return
       const label = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
       const text = journalDraft.trim()
-      setJournalEntries(prev => [{ date: label, text }, ...prev])
+      setJournalEntries(prev => [{ date: label, text, flutterReply: null }, ...prev])
       setJournalDraft('')
-      setJournalAiReply('')
+      setExpandedEntry(0)
       setJournalAiLoading(true)
       try {
         const reply = await callFlutter(FLUTTER_JOURNAL_SYSTEM, text)
-        setJournalAiReply(reply)
+        if (reply) {
+          setJournalEntries(prev => prev.map((e, i) => i === 0 ? { ...e, flutterReply: reply } : e))
+        }
       } catch {
         // fail silently
       } finally {
@@ -375,26 +377,38 @@ function App() {
             {journalEntries.map((entry, i) => (
               <Fragment key={i}>
                 <div className="h-card journal-entry-card">
-                  <div className="entry-header">
+                  <div
+                    className="entry-header entry-header--tappable"
+                    onClick={() => setExpandedEntry(expandedEntry === i ? null : i)}
+                  >
                     <p className="journal-entry-date">{entry.date}</p>
-                    <button
-                      className="entry-delete-btn"
-                      onClick={() => setJournalEntries(prev => prev.filter((_, j) => j !== i))}
-                      aria-label="Delete entry"
-                    >
-                      🗑
-                    </button>
+                    <div className="entry-header-actions">
+                      <span className="entry-chevron">{expandedEntry === i ? '▲' : '▼'}</span>
+                      <button
+                        className="entry-delete-btn"
+                        onClick={e => { e.stopPropagation(); setJournalEntries(prev => prev.filter((_, j) => j !== i)) }}
+                        aria-label="Delete entry"
+                      >
+                        🗑
+                      </button>
+                    </div>
                   </div>
-                  <p className="journal-entry-preview">{entry.text}</p>
+                  <p className={`journal-entry-preview${expandedEntry === i ? ' journal-entry-preview--full' : ''}`}>
+                    {entry.text}
+                  </p>
                 </div>
-                {i === 0 && (journalAiLoading || journalAiReply) && (
-                  <div className="h-card flutter-reply-card">
-                    <p className="flutter-name">🦋 Flutter</p>
-                    {journalAiLoading
-                      ? <p className="flutter-thinking">Flutter is thinking…</p>
-                      : <p className="flutter-reply-text">{journalAiReply}</p>
-                    }
-                  </div>
+                {expandedEntry === i && (
+                  i === 0 && journalAiLoading ? (
+                    <div className="h-card flutter-reply-card">
+                      <p className="flutter-name">🦋 Flutter</p>
+                      <p className="flutter-thinking">Flutter is thinking…</p>
+                    </div>
+                  ) : entry.flutterReply ? (
+                    <div className="h-card flutter-reply-card">
+                      <p className="flutter-name">🦋 Flutter said:</p>
+                      <p className="flutter-reply-text">{entry.flutterReply}</p>
+                    </div>
+                  ) : null
                 )}
               </Fragment>
             ))}
@@ -804,6 +818,8 @@ function App() {
       const reply = await callFlutter(FLUTTER_ONBOARDING_SYSTEM, problem)
       if (reply) {
         setOnboardingAiReply(reply)
+        const match = CATEGORIES.find(c => reply.includes(c))
+        if (match) setSelected(match)
       } else {
         setScreen(2)
       }

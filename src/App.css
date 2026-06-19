@@ -843,6 +843,22 @@ h1 {
   color: #378add;
 }
 
+.entry-header--tappable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.entry-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.entry-chevron {
+  font-size: 10px;
+  color: #aaa;
+}
+
 .journal-entry-preview {
   font-size: 14px;
   color: #444;
@@ -851,6 +867,11 @@ h1 {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.journal-entry-preview--full {
+  display: block;
+  overflow: visible;
 }
 
 /* ── Community screen ── */
