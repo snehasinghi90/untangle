@@ -869,6 +869,13 @@ h1 {
   padding: 20px 24px 100px;
 }
 
+.community-loading {
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+  padding: 24px 0;
+}
+
 .share-win-btn {
   width: 100%;
   padding: 14px;

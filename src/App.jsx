@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import { db, auth } from './firebase'
+import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
 
 const NAV_ITEMS = [
   { id: 'home',      emoji: '🏠', label: 'Home' },
@@ -85,13 +87,9 @@ function App() {
   const [showProfile, setShowProfile] = useState(false)
   const [journalDraft, setJournalDraft] = useState('')
   const [journalEntries, setJournalEntries] = useState(() => load('utgl_journalEntries', PLACEHOLDER_ENTRIES))
-  const [communityPosts, setCommunityPosts] = useState(() => load('utgl_communityPosts', [
-    { id: 1, name: 'Sarah', category: 'People-pleasing', text: "I said no to my mom and she got over it 💪 Thought it would be the end of the world. It wasn't.", likes: 14, liked: false },
-    { id: 2, name: 'Anonymous', category: 'Self-comparison', text: 'Deleted Instagram for a week. My anxiety actually went down noticeably. Might keep going.', likes: 22, liked: false },
-    { id: 3, name: 'Marcus', category: 'Perfectionism', text: "Submitted a work report that I knew wasn't perfect. The feedback was totally fine. I wasted so much energy stressing.", likes: 9, liked: false },
-    { id: 4, name: 'Priya', category: 'People-pleasing', text: 'Left a party early because I was tired instead of staying to make everyone happy. Felt guilty for like 10 mins, then great 😄', likes: 31, liked: false },
-    { id: 5, name: 'Anonymous', category: 'Time management', text: 'Blocked off Sunday mornings as non-negotiable me-time. Week 2 and I already feel more human.', likes: 17, liked: false },
-  ]))
+  const [communityPosts, setCommunityPosts] = useState([])
+  const [postsLoading, setPostsLoading] = useState(true)
+  const [likedPosts, setLikedPosts] = useState(() => load('utgl_likedPosts', []))
 
   useEffect(() => { save('utgl_screen', screen) }, [screen])
   useEffect(() => { save('utgl_selected', selected) }, [selected])
@@ -99,7 +97,16 @@ function App() {
   useEffect(() => { save('utgl_userName', userName) }, [userName])
   useEffect(() => { save('utgl_feeling', feeling) }, [feeling])
   useEffect(() => { save('utgl_journalEntries', journalEntries) }, [journalEntries])
-  useEffect(() => { save('utgl_communityPosts', communityPosts) }, [communityPosts])
+  useEffect(() => { save('utgl_likedPosts', likedPosts) }, [likedPosts])
+
+  useEffect(() => {
+    const q = query(collection(db, 'posts'), orderBy('timestamp', 'desc'))
+    const unsub = onSnapshot(q, snapshot => {
+      setCommunityPosts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+      setPostsLoading(false)
+    })
+    return unsub
+  }, [])
 
   const [toggles, setToggles] = useState({ reminder: true, community: true, darkMode: false })
   const flipToggle = key => setToggles(t => ({ ...t, [key]: !t[key] }))
@@ -355,23 +362,23 @@ function App() {
   }
 
   if (screen === 4 && navTab === 'community') {
-    const submitPost = () => {
+    const submitPost = async () => {
       if (!composeDraft.trim()) return
-      setCommunityPosts(prev => [{
-        id: Date.now(),
+      await addDoc(collection(db, 'posts'), {
         name: userName || 'Anonymous',
         category: selected || 'Something else',
         text: composeDraft.trim(),
         likes: 0,
-        liked: false,
-      }, ...prev])
+        timestamp: serverTimestamp(),
+        userId: auth.currentUser?.uid || 'anonymous',
+      })
       setComposeDraft('')
       setShowCompose(false)
     }
-    const toggleLike = (id) => {
-      setCommunityPosts(prev => prev.map(p =>
-        p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p
-      ))
+    const toggleLike = async (id) => {
+      const isLiked = likedPosts.includes(id)
+      await updateDoc(doc(db, 'posts', id), { likes: increment(isLiked ? -1 : 1) })
+      setLikedPosts(prev => isLiked ? prev.filter(x => x !== id) : [...prev, id])
     }
     return (
       <>
@@ -402,7 +409,9 @@ function App() {
                 </div>
               </div>
             )}
-            {communityPosts.map(post => (
+            {postsLoading ? (
+              <p className="community-loading">Loading posts…</p>
+            ) : communityPosts.map(post => (
               <div key={post.id} className="h-card community-post">
                 <div className="post-header">
                   <div>
@@ -410,7 +419,7 @@ function App() {
                     <span className="post-tag">{post.category}</span>
                   </div>
                   <button
-                    className={`like-btn${post.liked ? ' like-btn--active' : ''}`}
+                    className={`like-btn${likedPosts.includes(post.id) ? ' like-btn--active' : ''}`}
                     onClick={() => toggleLike(post.id)}
                   >
                     ♥ {post.likes}
