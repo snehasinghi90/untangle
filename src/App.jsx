@@ -242,9 +242,7 @@ function App() {
       const journalSnap = await getDocs(
         query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
       )
-      if (!journalSnap.empty) {
-        setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
-      }
+      setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
       setMoodCheckedIn(load('utgl_moodCheckedInDate', '') === getTodayStr())
       setScreen(6)
     } else {
@@ -292,6 +290,13 @@ function App() {
   useEffect(() => { if (mission) save('utgl_mission', mission) }, [mission])
   useEffect(() => { if (lesson) save('utgl_lesson', lesson) }, [lesson])
 
+  useEffect(() => {
+    if (navTab !== 'journal' || !currentUser?.uid) return
+    getDocs(query(collection(db, 'journals', currentUser.uid, 'entries'), orderBy('timestamp', 'desc')))
+      .then(snap => setJournalEntries(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(e => console.error('[Firestore] Journal tab fetch failed | code:', e.code, '| message:', e.message))
+  }, [navTab, currentUser?.uid]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [lessonFailed, setLessonFailed] = useState(false)
 
   useEffect(() => {
@@ -330,7 +335,9 @@ function App() {
       setDoc(doc(db, 'progress', currentUser.uid), {
         missionsCompleted: newMC, streak: newStreak, xp: newXp,
         lastCompletedDate: todayStr, completedDates: newDates,
-      }, { merge: true }).catch(console.error)
+      }, { merge: true }).catch(e =>
+        console.error('[Firestore] Progress update (mission complete) failed | code:', e.code, '| message:', e.message, e)
+      )
     }
   }
 
@@ -383,7 +390,9 @@ function App() {
     if (currentUser) {
       setDoc(doc(db, 'progress', currentUser.uid), {
         missionsCompleted: 0, streak: 0, xp: 0, lastCompletedDate: '', completedDates: [],
-      }, { merge: true }).catch(console.error)
+      }, { merge: true }).catch(e =>
+        console.error('[Firestore] Progress reset (change category) failed | code:', e.code, '| message:', e.message, e)
+      )
     }
   }
 
@@ -397,7 +406,9 @@ function App() {
     if (currentUser) {
       addDoc(collection(db, 'moods', currentUser.uid, 'entries'), {
         value: feeling, date: todayStr, timestamp: serverTimestamp(),
-      }).catch(console.error)
+      }).catch(e =>
+        console.error('[Firestore] Mood write failed | code:', e.code, '| message:', e.message, e)
+      )
     }
   }
 
@@ -438,7 +449,9 @@ function App() {
         setDoc(doc(db, 'progress', currentUser.uid), {
           missionsCompleted: newMC, streak: newStreak, xp: newXp,
           lastCompletedDate: todayStr, completedDates: newDates,
-        }, { merge: true }).catch(console.error)
+        }, { merge: true }).catch(e =>
+          console.error('[Firestore] Progress update (right now did it) failed | code:', e.code, '| message:', e.message, e)
+        )
       }
     }
     setRightNowXpFlash(true)
@@ -476,9 +489,7 @@ function App() {
         const journalSnap = await getDocs(
           query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
         )
-        if (!journalSnap.empty) {
-          setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
-        }
+        setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
       } else {
         const nameToUse = userName.trim() || user.displayName?.split(' ')[0] || ''
         if (nameToUse) setUserName(nameToUse)
@@ -848,18 +859,27 @@ function App() {
       setJournalAiLoading(true)
       let firestoreRef = null
       if (currentUser) {
-        firestoreRef = await addDoc(collection(db, 'journals', currentUser.uid, 'entries'), {
-          text, date: label, flutterReply: null, timestamp: serverTimestamp(),
-        }).catch(console.error)
+        try {
+          firestoreRef = await addDoc(collection(db, 'journals', currentUser.uid, 'entries'), {
+            text, date: label, flutterReply: null, timestamp: serverTimestamp(),
+          })
+          console.log('[Firestore] Journal entry created:', firestoreRef.id)
+        } catch (e) {
+          console.error('[Firestore] Journal addDoc failed | code:', e.code, '| message:', e.message, e)
+        }
       }
       try {
         const reply = await callFlutter(FLUTTER_JOURNAL_SYSTEM, text)
         if (reply) {
           setJournalEntries(prev => prev.map((e, i) => i === 0 ? { ...e, flutterReply: reply } : e))
-          if (firestoreRef) updateDoc(firestoreRef, { flutterReply: reply }).catch(console.error)
+          if (firestoreRef) {
+            updateDoc(firestoreRef, { flutterReply: reply }).catch(e =>
+              console.error('[Firestore] Journal flutterReply update failed | code:', e.code, '| message:', e.message)
+            )
+          }
         }
       } catch {
-        // fail silently
+        // AI call failure - journal text already saved above
       } finally {
         setJournalAiLoading(false)
       }
@@ -907,7 +927,9 @@ function App() {
                           e.stopPropagation()
                           const entry = journalEntries[i]
                           if (entry.id && currentUser) {
-                            deleteDoc(doc(db, 'journals', currentUser.uid, 'entries', entry.id)).catch(console.error)
+                            deleteDoc(doc(db, 'journals', currentUser.uid, 'entries', entry.id)).catch(e =>
+                              console.error('[Firestore] Journal delete failed | code:', e.code, '| message:', e.message)
+                            )
                           }
                           setJournalEntries(prev => prev.filter((_, j) => j !== i))
                         }}
