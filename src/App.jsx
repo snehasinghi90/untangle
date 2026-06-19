@@ -181,6 +181,7 @@ function App() {
   const [xp, setXp] = useState(() => load('utgl_xp', 0))
   const [completedDates, setCompletedDates] = useState(() => load('utgl_completedDates', []))
   const [missionSuccess, setMissionSuccess] = useState(false)
+  const [moodCheckedIn, setMoodCheckedIn] = useState(() => load('utgl_moodCheckedInDate', '') === getTodayStr())
 
   const [showRightNow, setShowRightNow] = useState(false)
   const [rightNowLoading, setRightNowLoading] = useState(false)
@@ -278,6 +279,15 @@ function App() {
     setProblem('')
     setScreen(2)
     setShowProfile(false)
+  }
+
+  const handleMoodCheckin = () => {
+    if (moodCheckedIn) return
+    const history = load('utgl_moodHistory', [])
+    const updated = [...history, { date: todayStr, value: feeling }].slice(-90)
+    save('utgl_moodHistory', updated)
+    save('utgl_moodCheckedInDate', todayStr)
+    setMoodCheckedIn(true)
   }
 
   const handleRightNowOpen = () => {
@@ -941,7 +951,13 @@ function App() {
                 <span className="h-emoji">😊</span>
               </div>
               <p className="h-feeling-number">{feeling}</p>
-              <button className="h-btn h-btn--blue">Submit Check-in</button>
+              <button
+                className="h-btn h-btn--blue"
+                onClick={handleMoodCheckin}
+                disabled={moodCheckedIn}
+              >
+                {moodCheckedIn ? '✅ Logged for today' : 'Submit Check-in'}
+              </button>
             </div>
 
           </div>
