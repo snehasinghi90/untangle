@@ -70,7 +70,19 @@ function save(key, value) {
 
 const FLUTTER_ONBOARDING_SYSTEM = "You are Flutter, a warm and supportive mental health companion. The user has just shared what's bothering them. Respond in 3 sentences maximum: first acknowledge what they shared with genuine empathy, then say you'd like to understand better, then end with exactly one sentence suggesting the most relevant category from this list: People-pleasing, Self-comparison, Perfectionism, Time management. The final sentence must follow this format: \"Based on what you shared, it sounds like [category] might be the place to start.\" Be warm, never clinical. Never mention therapy or diagnosis."
 
-const FLUTTER_JOURNAL_SYSTEM = "You are Flutter, a warm mental health companion using Adlerian psychology. When a user shares a journal entry, do two things in under 4 sentences: ask ONE specific follow-up question about what they wrote, then offer a brief Adlerian reframe focused on courage and growth (not thought-challenging). Be warm and human. Never mention therapy, diagnosis, or that you are an AI. End with the question. If anything suggests a crisis, respond only with: 'It sounds like you might be going through something really hard. Please reach out to the 988 Suicide and Crisis Lifeline by calling or texting 988.'"
+const FLUTTER_JOURNAL_SYSTEM = "You are Flutter, a warm mental health companion. When a user shares a journal entry, do two things in 4 sentences maximum: first offer a brief reframe that sounds like hard-won wisdom from a wise friend — not a named psychological framework. Good reframes sound like: 'The guilt you felt? That is not proof you did something wrong. It is just a pattern trying to stay alive.' or 'You were taught that love means saying yes. That is not a flaw — it made sense once.' Then ask ONE specific follow-up question that digs into the exact situation they described, not a generic question like how did that make you feel. Be warm and human. Never name any psychological framework. Never mention therapy, diagnosis, or that you are an AI. End with the question. If anything suggests a crisis, respond only with: 'It sounds like you might be going through something really hard. Please reach out to the 988 Suicide and Crisis Lifeline by calling or texting 988.'"
+
+const FLUTTER_MISSION_SYSTEM = 'You are Flutter, a warm mental health companion. Based on the user\'s specific situation and category, generate a personalized daily mission. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "Short mission title specific to their situation",\n  "steps": [\n    "Specific step 1 related to their actual situation",\n    "Specific step 2",\n    "Specific step 3",\n    "Specific step 4"\n  ]\n}\nThe steps should feel like they were written specifically for this person\'s situation, not generic advice. Use their exact context — if they mentioned their mom, reference that. If they mentioned work, reference that. Make it feel personal and actionable.'
+
+const DEFAULT_MISSION = {
+  title: 'Notice when you say yes',
+  steps: [
+    'Pause before you respond to a request',
+    'Ask yourself: do I actually want this?',
+    'Say no to one small thing today',
+    'Write down how it felt afterward',
+  ],
+}
 
 async function callFlutter(system, userText) {
   const res = await fetch('/api/chat', {
@@ -143,13 +155,10 @@ function App() {
   const [onboardingAiLoading, setOnboardingAiLoading] = useState(false)
   const [journalAiLoading, setJournalAiLoading] = useState(false)
   const [expandedEntry, setExpandedEntry] = useState(null)
+  const [mission, setMission] = useState(() => load('utgl_mission', null))
+  const [missionLoading, setMissionLoading] = useState(false)
 
-  const missionSteps = [
-    'Pause before you respond to a request',
-    'Ask yourself: do I actually want this?',
-    'Say no to one small thing today',
-    'Write down how it felt afterward',
-  ]
+  useEffect(() => { save('utgl_mission', mission) }, [mission])
 
   const BottomNav = () => (
     <nav className="nav-bar">
@@ -702,17 +711,23 @@ function App() {
 
             <div className="h-card h-card--mission">
               <p className="h-card-label">🎯 Guided Mission</p>
-              <p className="h-card-title">Notice when you say yes</p>
-              <div className="h-steps">
-                {missionSteps.map((step, i) => (
-                  <div key={i} className={`h-step${i === 0 ? ' h-step--active' : ''}`}>
-                    <span className="h-step-num">{i + 1}</span>
-                    <span className="h-step-text">{step}</span>
+              {missionLoading ? (
+                <p className="flutter-thinking">Flutter is creating your mission…</p>
+              ) : (
+                <>
+                  <p className="h-card-title">{(mission || DEFAULT_MISSION).title}</p>
+                  <div className="h-steps">
+                    {(mission || DEFAULT_MISSION).steps.map((step, i) => (
+                      <div key={i} className={`h-step${i === 0 ? ' h-step--active' : ''}`}>
+                        <span className="h-step-num">{i + 1}</span>
+                        <span className="h-step-text">{step}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <button className="h-btn h-btn--gold">✅ I Did The Steps!</button>
-              <button className="h-btn h-btn--red">🔥 I'm Doing It RIGHT NOW!</button>
+                  <button className="h-btn h-btn--gold">✅ I Did The Steps!</button>
+                  <button className="h-btn h-btn--red">🔥 I'm Doing It RIGHT NOW!</button>
+                </>
+              )}
             </div>
 
             <button
@@ -777,7 +792,25 @@ function App() {
         <button
           className="next-button"
           disabled={!butterflyName.trim() || !userName.trim()}
-          onClick={() => setScreen(4)}
+          onClick={async () => {
+            setScreen(4)
+            if (mission !== null) return
+            setMissionLoading(true)
+            try {
+              const reply = await callFlutter(
+                FLUTTER_MISSION_SYSTEM,
+                `My situation: ${problem}. I'm working on: ${selected}.`
+              )
+              const parsed = JSON.parse(reply)
+              if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+                setMission(parsed)
+              }
+            } catch {
+              // fail silently — DEFAULT_MISSION will be used
+            } finally {
+              setMissionLoading(false)
+            }
+          }}
         >
           Let's go
         </button>
@@ -842,7 +875,14 @@ function App() {
         <>
           <div className="onboarding-reply-card">
             <p className="flutter-name">🦋 Flutter</p>
-            <p className="onboarding-reply-text">{onboardingAiReply}</p>
+            <p className="onboarding-reply-text">
+              {(() => {
+                const cat = CATEGORIES.find(c => onboardingAiReply.includes(c))
+                if (!cat) return onboardingAiReply
+                const idx = onboardingAiReply.indexOf(cat)
+                return <>{onboardingAiReply.slice(0, idx)}<strong>{cat}</strong>{onboardingAiReply.slice(idx + cat.length)}</>
+              })()}
+            </p>
           </div>
           <button className="next-button" onClick={() => setScreen(2)}>
             Continue →
