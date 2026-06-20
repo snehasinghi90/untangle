@@ -1939,6 +1939,9 @@ function App() {
             </div>
 
           </div>
+
+          <p className="home-crisis-link">Crisis support: <a href="tel:988">988</a></p>
+
         </div>
         <BottomNav />
 

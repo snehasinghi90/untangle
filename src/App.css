@@ -1813,3 +1813,19 @@ h1 {
   color: #9ca3af;
   margin-top: 6px;
 }
+
+.home-crisis-link {
+  font-size: 11px;
+  color: #bbb;
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.home-crisis-link a {
+  color: #bbb;
+  text-decoration: none;
+}
+
+.home-crisis-link a:hover {
+  text-decoration: underline;
+}
