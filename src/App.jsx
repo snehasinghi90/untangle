@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: 'journal',   emoji: '📝', label: 'Journal' },
   { id: 'community', emoji: '👥', label: 'Community' },
   { id: 'insights',  emoji: '📊', label: 'Insights' },
+  { id: 'plan',      emoji: '🗺️', label: 'Plan' },
 ]
 
 const LESSONS = [
@@ -83,6 +84,193 @@ const FLUTTER_RIGHT_NOW_SYSTEM = "You are Flutter. The user is in a real moment 
 const RIGHT_NOW_FALLBACK = "You've been preparing for exactly this. Whatever you're about to do — you're ready. Take one breath. You know what to say."
 
 const FLUTTER_INSIGHTS_SYSTEM = "You are Flutter. Read these journal entries and write a warm, honest 3-4 sentence summary of what patterns you notice — what this person seems to be working through, what's improving, what's still hard. Reference specific things they wrote about. Don't use clinical language. Sound like a wise friend who's been paying attention. Start with 'Over the past [X] entries...' Never mention Adler or any framework name."
+
+const FLUTTER_MISSION_PLAN_SYSTEM = 'You are Flutter. Generate a personalized 20-mission journey for someone working on their mental wellness. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "phases": [\n    {\n      "id": 1,\n      "title": "Phase 1: Foundation",\n      "missions": [\n        { "id": 1, "title": "Short mission title 5-7 words" },\n        { "id": 2, "title": "Short mission title 5-7 words" },\n        { "id": 3, "title": "Short mission title 5-7 words" },\n        { "id": 4, "title": "Short mission title 5-7 words" },\n        { "id": 5, "title": "Short mission title 5-7 words" }\n      ]\n    },\n    { "id": 2, "title": "Phase 2: Awareness", "missions": [ ...5 missions ids 6-10... ] },\n    { "id": 3, "title": "Phase 3: Practice", "missions": [ ...5 missions ids 11-15... ] },\n    { "id": 4, "title": "Phase 4: Integration", "missions": [ ...5 missions ids 16-20... ] }\n  ]\n}\nReturn exactly 4 phases with exactly 5 missions each (20 total). Mission IDs must be sequential 1-20. Each mission title should be specific to the user\'s situation and category. Missions build in difficulty across phases.'
+
+const FLUTTER_EXPAND_MISSION_SYSTEM = 'You are Flutter. A user has a mission topic for today. Expand it into a concrete, doable mission. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "Mission title 5-7 words matching the topic",\n  "steps": [\n    "Tiny concrete step 1",\n    "Tiny concrete step 2",\n    "Tiny concrete step 3",\n    "Tiny concrete step 4"\n  ]\n}\nCRITICAL: The whole mission must take 5-10 minutes maximum. Steps must be tiny and concrete. Reference the user\'s specific context directly.'
+
+const FALLBACK_PLANS = {
+  'People-pleasing': { phases: [
+    { id: 1, title: 'Phase 1: Foundation', missions: [
+      { id: 1, title: 'Notice your first yes of the day' },
+      { id: 2, title: 'Pause before answering one request' },
+      { id: 3, title: 'Write down what you actually want' },
+      { id: 4, title: 'Say let me think about it once' },
+      { id: 5, title: 'Notice guilt without acting on it' },
+    ]},
+    { id: 2, title: 'Phase 2: Awareness', missions: [
+      { id: 6, title: 'Spot one automatic yes today' },
+      { id: 7, title: 'Name the fear behind your yes' },
+      { id: 8, title: 'Let one request sit briefly unanswered' },
+      { id: 9, title: 'Notice whose approval you sought today' },
+      { id: 10, title: 'Write what you gave up by saying yes' },
+    ]},
+    { id: 3, title: 'Phase 3: Practice', missions: [
+      { id: 11, title: 'Say no to one small thing' },
+      { id: 12, title: 'Offer a counter-offer instead of yes' },
+      { id: 13, title: 'Hold a boundary for one hour' },
+      { id: 14, title: 'Let someone be disappointed briefly' },
+      { id: 15, title: 'Prioritize one thing only you want' },
+    ]},
+    { id: 4, title: 'Phase 4: Integration', missions: [
+      { id: 16, title: 'Choose yourself in one decision today' },
+      { id: 17, title: 'Say no warmly with no explanation' },
+      { id: 18, title: 'Notice what changed when you said no' },
+      { id: 19, title: 'Celebrate one real choice you made' },
+      { id: 20, title: 'Write your own wants list for the week' },
+    ]},
+  ]},
+  'Self-comparison': { phases: [
+    { id: 1, title: 'Phase 1: Foundation', missions: [
+      { id: 1, title: 'Catch one comparison thought today' },
+      { id: 2, title: 'Name what you are actually afraid of' },
+      { id: 3, title: 'List three things only you have done' },
+      { id: 4, title: 'Notice what triggers comparison for you' },
+      { id: 5, title: 'Unfollow one account that triggers you' },
+    ]},
+    { id: 2, title: 'Phase 2: Awareness', missions: [
+      { id: 6, title: 'Write what comparison is costing you' },
+      { id: 7, title: 'Name one thing you chose for yourself' },
+      { id: 8, title: 'Notice comparison without feeding it' },
+      { id: 9, title: 'Find one area where you are ahead' },
+      { id: 10, title: 'Ask whose timeline am I following' },
+    ]},
+    { id: 3, title: 'Phase 3: Practice', missions: [
+      { id: 11, title: 'Take one action just for you today' },
+      { id: 12, title: 'Define success on your own terms' },
+      { id: 13, title: 'Redirect comparison into curiosity once' },
+      { id: 14, title: 'Celebrate one win no one else noticed' },
+      { id: 15, title: 'Write your own next chapter opening' },
+    ]},
+    { id: 4, title: 'Phase 4: Integration', missions: [
+      { id: 16, title: 'Design one day on your own metrics' },
+      { id: 17, title: 'Name three things you value about yourself' },
+      { id: 18, title: 'Let someone else win without cost to you' },
+      { id: 19, title: 'Notice when you stopped comparing today' },
+      { id: 20, title: 'Write your personal definition of enough' },
+    ]},
+  ]},
+  'Perfectionism': { phases: [
+    { id: 1, title: 'Phase 1: Foundation', missions: [
+      { id: 1, title: 'Finish something imperfect on purpose' },
+      { id: 2, title: 'Name what good enough looks like today' },
+      { id: 3, title: 'Notice the fear behind your high standards' },
+      { id: 4, title: 'Ship something before it feels ready' },
+      { id: 5, title: 'Give yourself a time limit for one task' },
+    ]},
+    { id: 2, title: 'Phase 2: Awareness', missions: [
+      { id: 6, title: 'Catch yourself over-polishing today' },
+      { id: 7, title: 'Ask who am I doing this for' },
+      { id: 8, title: 'Notice what you avoid because of fear' },
+      { id: 9, title: 'Make one small decision quickly on purpose' },
+      { id: 10, title: 'Write down what done actually means' },
+    ]},
+    { id: 3, title: 'Phase 3: Practice', missions: [
+      { id: 11, title: 'Do one thing at 80% and call it done' },
+      { id: 12, title: 'Send something unpolished to one person' },
+      { id: 13, title: 'Let a mistake exist without fixing it' },
+      { id: 14, title: 'Start something you have been delaying' },
+      { id: 15, title: 'Decide in two minutes on one thing' },
+    ]},
+    { id: 4, title: 'Phase 4: Integration', missions: [
+      { id: 16, title: 'Finish five things at good-enough today' },
+      { id: 17, title: 'Notice what improved by being faster' },
+      { id: 18, title: 'Let someone see your work in progress' },
+      { id: 19, title: 'Celebrate done over perfect once' },
+      { id: 20, title: 'Write your new bar for good enough' },
+    ]},
+  ]},
+  'Overthinking': { phases: [
+    { id: 1, title: 'Phase 1: Foundation', missions: [
+      { id: 1, title: 'Name the loop you are in right now' },
+      { id: 2, title: 'Set a 2-minute timer and decide' },
+      { id: 3, title: 'Take one small action without certainty' },
+      { id: 4, title: 'Notice one thought you have replayed today' },
+      { id: 5, title: 'Move your body for 5 minutes to reset' },
+    ]},
+    { id: 2, title: 'Phase 2: Awareness', missions: [
+      { id: 6, title: 'Catch yourself thinking instead of acting' },
+      { id: 7, title: 'Name what certainty you are waiting for' },
+      { id: 8, title: 'Write the worst case and rate likelihood' },
+      { id: 9, title: 'Make one decision and stick with it' },
+      { id: 10, title: 'Notice when analysis stops helping you' },
+    ]},
+    { id: 3, title: 'Phase 3: Practice', missions: [
+      { id: 11, title: 'Act on something you have been circling' },
+      { id: 12, title: 'Let a decision be made and move on' },
+      { id: 13, title: 'Interrupt one loop with a physical action' },
+      { id: 14, title: 'Stop researching one thing and just do it' },
+      { id: 15, title: 'Trust your gut on one small thing today' },
+    ]},
+    { id: 4, title: 'Phase 4: Integration', missions: [
+      { id: 16, title: 'Make five small decisions fast today' },
+      { id: 17, title: 'Notice what happened after you decided' },
+      { id: 18, title: 'Let uncertainty exist without resolving it' },
+      { id: 19, title: 'Write what you would tell a friend in loops' },
+      { id: 20, title: 'Celebrate one brave imperfect decision' },
+    ]},
+  ]},
+  'Overwhelm': { phases: [
+    { id: 1, title: 'Phase 1: Foundation', missions: [
+      { id: 1, title: 'Write everything in your head right now' },
+      { id: 2, title: 'Cross off what is not yours to carry today' },
+      { id: 3, title: 'Pick just one thing and only do that' },
+      { id: 4, title: 'Say no to one non-essential thing' },
+      { id: 5, title: 'Take a 10-minute break on purpose' },
+    ]},
+    { id: 2, title: 'Phase 2: Awareness', missions: [
+      { id: 6, title: 'Notice what you absorbed from others today' },
+      { id: 7, title: 'Name the most important thing only' },
+      { id: 8, title: 'Ask what happens if this waits' },
+      { id: 9, title: 'Identify one task to delete or delegate' },
+      { id: 10, title: 'Write what enough for today looks like' },
+    ]},
+    { id: 3, title: 'Phase 3: Practice', missions: [
+      { id: 11, title: 'Protect one hour for deep work today' },
+      { id: 12, title: 'Finish one thing before starting another' },
+      { id: 13, title: 'Let something slide without guilt today' },
+      { id: 14, title: 'Ask for help with one thing you carry' },
+      { id: 15, title: 'Design a shorter to-do list on purpose' },
+    ]},
+    { id: 4, title: 'Phase 4: Integration', missions: [
+      { id: 16, title: 'Start the day with your one real priority' },
+      { id: 17, title: 'Notice when you have done enough today' },
+      { id: 18, title: 'Protect your energy from one draining thing' },
+      { id: 19, title: 'End the day with three things done well' },
+      { id: 20, title: 'Write your personal definition of a good day' },
+    ]},
+  ]},
+  'Something else': { phases: [
+    { id: 1, title: 'Phase 1: Foundation', missions: [
+      { id: 1, title: 'Name the pattern you want to change' },
+      { id: 2, title: 'Notice when the pattern shows up today' },
+      { id: 3, title: 'Write one thing you want instead' },
+      { id: 4, title: 'Take one small step in a new direction' },
+      { id: 5, title: 'Pause before reacting to one trigger' },
+    ]},
+    { id: 2, title: 'Phase 2: Awareness', missions: [
+      { id: 6, title: 'Track when the old pattern appears today' },
+      { id: 7, title: 'Name the feeling underneath the pattern' },
+      { id: 8, title: 'Ask what you are protecting yourself from' },
+      { id: 9, title: 'Notice one small sign of growth today' },
+      { id: 10, title: 'Write what triggers the pattern most' },
+    ]},
+    { id: 3, title: 'Phase 3: Practice', missions: [
+      { id: 11, title: 'Respond differently to one trigger today' },
+      { id: 12, title: 'Choose your values over your habits once' },
+      { id: 13, title: 'Let an urge pass without acting on it' },
+      { id: 14, title: 'Do one thing your future self will thank you for' },
+      { id: 15, title: 'Name one moment you handled things better' },
+    ]},
+    { id: 4, title: 'Phase 4: Integration', missions: [
+      { id: 16, title: 'Design one day around who you are becoming' },
+      { id: 17, title: 'Notice the gap between old you and now' },
+      { id: 18, title: 'Let someone see your growth today' },
+      { id: 19, title: 'Write what you have learned about yourself' },
+      { id: 20, title: 'Celebrate how far you have actually come' },
+    ]},
+  ]},
+}
 
 function getAuthErrorMessage(code) {
   if (['auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code))
@@ -215,6 +403,7 @@ function App() {
   const [insightsSummary, setInsightsSummary] = useState('')
   const [insightsSummaryLoading, setInsightsSummaryLoading] = useState(false)
   const insightsSummaryFetchedRef = useRef(false)
+  const expandingMissionRef = useRef(false)
 
   const [authLoading, setAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
@@ -233,9 +422,10 @@ function App() {
   useEffect(() => { save('utgl_completedDates', completedDates) }, [completedDates])
 
   const loadUserAndRoute = async (user) => {
-    const [userSnap, progressSnap] = await Promise.all([
+    const [userSnap, progressSnap, planSnap] = await Promise.all([
       getDoc(doc(db, 'users', user.uid)),
       getDoc(doc(db, 'progress', user.uid)),
+      getDoc(doc(db, 'missionPlans', user.uid)),
     ])
     if (userSnap.exists()) {
       const u = userSnap.data()
@@ -253,7 +443,12 @@ function App() {
       setLastCompletedDate(p.lastCompletedDate ?? '')
       setCompletedToday((p.lastCompletedDate ?? '') === new Date().toDateString())
       setCompletedDates(p.completedDates ?? [])
+      if (p.currentMission?.expandedDate === new Date().toDateString()) {
+        const { title, steps } = p.currentMission
+        setMission({ title, steps, cachedDate: new Date().toDateString() })
+      }
     }
+    if (planSnap.exists()) setMissionPlan(planSnap.data())
     if (userSnap.exists()) {
       const journalSnap = await getDocs(
         query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
@@ -293,9 +488,16 @@ function App() {
   const [onboardingAiLoading, setOnboardingAiLoading] = useState(false)
   const [journalAiLoading, setJournalAiLoading] = useState(false)
   const [expandedEntry, setExpandedEntry] = useState(null)
-  const [mission, setMission] = useState(() => load('utgl_mission', null))
+  const [mission, setMission] = useState(() => {
+    const m = load('utgl_mission', null)
+    return (m && m.cachedDate === new Date().toDateString()) ? m : null
+  })
   const [missionLoading, setMissionLoading] = useState(false)
   const [lesson, setLesson] = useState(() => load('utgl_lesson', null))
+  const [missionPlan, setMissionPlan] = useState(null)
+  const [showPlanLoading, setShowPlanLoading] = useState(false)
+  const [editingMissionId, setEditingMissionId] = useState(null)
+  const [editDraft, setEditDraft] = useState('')
 
   useEffect(() => { if (mission) save('utgl_mission', mission) }, [mission])
   useEffect(() => { if (lesson) save('utgl_lesson', lesson) }, [lesson])
@@ -347,6 +549,20 @@ function App() {
       })
       .catch(() => setLessonFailed(true))
   }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (screen !== 7 || !currentUser?.uid || !missionPlan || mission || missionLoading || expandingMissionRef.current) return
+    const allMissions = missionPlan.phases.flatMap(p => p.missions)
+    const currentTopic = allMissions.find(m => m.id === missionsCompleted + 1)
+    if (!currentTopic) return
+    expandingMissionRef.current = true
+    setMissionLoading(true)
+    expandCurrentMission(currentUser.uid, currentTopic.title)
+      .finally(() => {
+        setMissionLoading(false)
+        expandingMissionRef.current = false
+      })
+  }, [screen, missionPlan, mission]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayStr = getTodayStr()          // YYYY-MM-DD — used for completedDates array, mood, PDF
   const todayDateStr = new Date().toDateString() // local date string — used for lastCompletedDate
@@ -411,6 +627,7 @@ function App() {
     setUserName('')
     setFeeling(5)
     setMission(null)
+    setMissionPlan(null)
     setLesson(null)
     setLessonFailed(false)
     setMissionsCompleted(0)
@@ -427,6 +644,7 @@ function App() {
     setAuthPassword('')
     setAuthError('')
     setShowEmailSignIn(false)
+    expandingMissionRef.current = false
   }
 
   const handleChangeCategory = async () => {
@@ -435,6 +653,7 @@ function App() {
     localStorage.removeItem('utgl_lesson')
     setSelected(null)
     setMission(null)
+    setMissionPlan(null)
     setLesson(null)
     setLessonFailed(false)
     setMissionsCompleted(0)
@@ -444,6 +663,7 @@ function App() {
     setCompletedDates([])
     setProblem('')
     setScreen(4)
+    expandingMissionRef.current = false
     setShowProfile(false)
     if (currentUser) {
       setDoc(doc(db, 'progress', currentUser.uid), {
@@ -560,6 +780,80 @@ function App() {
     showSuccess()
   }
 
+  const generateAndSaveMissionPlan = async (uid) => {
+    const ctx = `My situation: ${problem}. I am working on: ${selected || 'personal growth'}.`
+    try {
+      const reply = await callFlutter(FLUTTER_MISSION_PLAN_SYSTEM, ctx)
+      const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+      const parsed = JSON.parse(cleaned)
+      if (parsed.phases?.length > 0) {
+        await setDoc(doc(db, 'missionPlans', uid), { phases: parsed.phases, generatedAt: serverTimestamp() })
+        setMissionPlan(parsed)
+        return parsed
+      }
+    } catch (e) {
+      console.error('[MissionPlan] Generation failed, using fallback:', e)
+    }
+    const fallback = FALLBACK_PLANS[selected] || FALLBACK_PLANS['Something else']
+    await setDoc(doc(db, 'missionPlans', uid), { phases: fallback.phases, generatedAt: serverTimestamp() })
+    setMissionPlan(fallback)
+    return fallback
+  }
+
+  const expandCurrentMission = async (uid, topicTitle) => {
+    const ctx = `My situation: ${problem}. I am working on: ${selected || 'personal growth'}. Today's mission topic: ${topicTitle}`
+    try {
+      const reply = await callFlutter(FLUTTER_EXPAND_MISSION_SYSTEM, ctx)
+      const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+      const parsed = JSON.parse(cleaned)
+      if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        const missionData = { title: parsed.title, steps: parsed.steps, cachedDate: new Date().toDateString() }
+        setMission(missionData)
+        if (uid) {
+          await setDoc(doc(db, 'progress', uid), {
+            currentMission: { title: parsed.title, steps: parsed.steps, expandedDate: new Date().toDateString() },
+          }, { merge: true })
+        }
+        return
+      }
+    } catch (e) {
+      console.error('[ExpandMission] Failed:', e)
+    }
+    setMission(DEFAULT_MISSION)
+  }
+
+  const handleSaveMissionEdit = async (missionId, newTitle) => {
+    if (!missionPlan || !newTitle.trim()) return
+    const updatedPhases = missionPlan.phases.map(phase => ({
+      ...phase,
+      missions: phase.missions.map(m => m.id === missionId ? { ...m, title: newTitle.trim() } : m),
+    }))
+    const updatedPlan = { ...missionPlan, phases: updatedPhases }
+    setMissionPlan(updatedPlan)
+    setEditingMissionId(null)
+    setEditDraft('')
+    if (currentUser) {
+      setDoc(doc(db, 'missionPlans', currentUser.uid), { phases: updatedPhases }, { merge: true })
+        .catch(e => console.error('[Firestore] MissionPlan edit failed | code:', e.code, '| message:', e.message, e))
+    }
+  }
+
+  const handleRegenerateMission = async () => {
+    if (!missionPlan || !currentUser?.uid) return
+    setMission(null)
+    localStorage.removeItem('utgl_mission')
+    const allMissions = missionPlan.phases.flatMap(p => p.missions)
+    const currentTopic = allMissions.find(m => m.id === missionsCompleted + 1)
+    if (!currentTopic) return
+    expandingMissionRef.current = false
+    setMissionLoading(true)
+    try {
+      await expandCurrentMission(currentUser.uid, currentTopic.title)
+    } finally {
+      setMissionLoading(false)
+    }
+  }
+
   const handleGoogleAuth = async () => {
     setAuthError('')
     setAuthSubmitting(true)
@@ -575,7 +869,11 @@ function App() {
         if (u.selectedCategory) setSelected(u.selectedCategory)
         if (u.problem)          setProblem(u.problem)
         if (user.email)         setProfileEmail(user.email)
-        const progressSnap = await getDoc(doc(db, 'progress', user.uid))
+        const [progressSnap, planSnap, journalSnap] = await Promise.all([
+          getDoc(doc(db, 'progress', user.uid)),
+          getDoc(doc(db, 'missionPlans', user.uid)),
+          getDocs(query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))),
+        ])
         if (progressSnap.exists()) {
           const p = progressSnap.data()
           setMissionsCompleted(p.missionsCompleted ?? 0)
@@ -584,11 +882,15 @@ function App() {
           setLastCompletedDate(p.lastCompletedDate ?? '')
           setCompletedToday((p.lastCompletedDate ?? '') === new Date().toDateString())
           setCompletedDates(p.completedDates ?? [])
+          if (p.currentMission?.expandedDate === new Date().toDateString()) {
+            const { title, steps } = p.currentMission
+            setMission({ title, steps, cachedDate: new Date().toDateString() })
+          }
         }
-        const journalSnap = await getDocs(
-          query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
-        )
+        if (planSnap.exists()) setMissionPlan(planSnap.data())
         setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        save('utgl_hadAccount', true)
+        setScreen(7)
       } else {
         const nameToUse = userName.trim() || user.displayName?.split(' ')[0] || ''
         if (nameToUse) setUserName(nameToUse)
@@ -616,9 +918,11 @@ function App() {
           console.error('[Firestore] setDoc failed for uid:', user.uid, '| code:', fsErr.code, '| message:', fsErr.message, fsErr)
           throw fsErr
         }
+        save('utgl_hadAccount', true)
+        setShowPlanLoading(true)
+        setScreen(7)
+        try { await generateAndSaveMissionPlan(user.uid) } finally { setShowPlanLoading(false) }
       }
-      save('utgl_hadAccount', true)
-      setScreen(7)
     } catch (e) {
       console.error('[handleGoogleAuth] error:', e.code, e.message, e)
       setAuthError(getAuthErrorMessage(e.code))
@@ -681,7 +985,9 @@ function App() {
           throw fsErr
         }
         save('utgl_hadAccount', true)
+        setShowPlanLoading(true)
         setScreen(7)
+        try { await generateAndSaveMissionPlan(result.user.uid) } finally { setShowPlanLoading(false) }
       } else {
         // Sign-in path (used from landing screen email sign-in)
         const result = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword)
@@ -737,6 +1043,16 @@ function App() {
       <div className="auth-loading-screen">
         <div className="auth-loading-butterfly">🦋</div>
         <p className="auth-loading-text">Loading...</p>
+      </div>
+    )
+  }
+
+  if (showPlanLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-butterfly">🦋</div>
+        <p className="auth-loading-text">Flutter is building your personal mission plan…</p>
+        <p className="auth-loading-sub">This takes about 10 seconds</p>
       </div>
     )
   }
@@ -1412,6 +1728,100 @@ function App() {
     )
   }
 
+  if (screen === 7 && navTab === 'plan') {
+    const allMissions = (missionPlan?.phases || []).flatMap(p => p.missions)
+    const totalMissions = allMissions.length
+    const currentMissionId = Math.min(missionsCompleted + 1, totalMissions + 1)
+
+    if (editingMissionId !== null) {
+      return (
+        <>
+          <div className="plan-screen">
+            <div className="journal-header">
+              <button className="back-link" onClick={() => { setEditingMissionId(null); setEditDraft('') }}>← Back</button>
+              <p className="journal-title">Edit Mission</p>
+            </div>
+            <div className="plan-body">
+              <div className="h-card">
+                <p className="h-card-label">Mission title</p>
+                <input
+                  className="plan-edit-input"
+                  value={editDraft}
+                  onChange={e => setEditDraft(e.target.value)}
+                  placeholder="Mission title..."
+                  autoFocus
+                />
+                <button
+                  className="h-btn h-btn--blue"
+                  style={{ marginTop: 12 }}
+                  onClick={() => handleSaveMissionEdit(editingMissionId, editDraft)}
+                  disabled={!editDraft.trim()}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+          <BottomNav />
+        </>
+      )
+    }
+
+    return (
+      <>
+        <div className="plan-screen">
+          <div className="journal-header">
+            <p className="journal-title">Mission Plan</p>
+            <p className="journal-date">Your 20-mission journey 🗺️</p>
+          </div>
+          <div className="plan-body">
+            {!missionPlan ? (
+              <div className="h-card">
+                <p className="flutter-thinking">Flutter is building your plan…</p>
+              </div>
+            ) : (
+              missionPlan.phases.map(phase => (
+                <div key={phase.id} className="plan-phase">
+                  <p className="plan-phase-title">{phase.title}</p>
+                  {phase.missions.map(m => {
+                    const isCompleted = m.id <= missionsCompleted
+                    const isCurrent = m.id === currentMissionId
+                    const isUpcoming = !isCompleted && !isCurrent && m.id <= currentMissionId + 3
+                    const isLocked = !isCompleted && !isCurrent && !isUpcoming
+                    return (
+                      <div
+                        key={m.id}
+                        className={`plan-mission${isCompleted ? ' plan-mission--done' : ''}${isCurrent ? ' plan-mission--current' : ''}${isLocked ? ' plan-mission--locked' : ''}`}
+                      >
+                        <div className="plan-mission-left">
+                          <span className="plan-mission-icon">
+                            {isCompleted ? '✅' : isCurrent ? '🎯' : isLocked ? '🔒' : '○'}
+                          </span>
+                          <span className="plan-mission-title-text">
+                            {isLocked ? 'Mission locked' : m.title}
+                          </span>
+                        </div>
+                        <div className="plan-mission-right">
+                          {!isLocked && (
+                            <button className="plan-edit-btn" onClick={() => { setEditingMissionId(m.id); setEditDraft(m.title) }}>Edit</button>
+                          )}
+                          {isCurrent && (
+                            <button className="plan-regen-btn" onClick={handleRegenerateMission}>↻</button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <BottomNav />
+      </>
+    )
+  }
+
   if (screen === 7 && navTab !== 'home') {
     const title = NAV_ITEMS.find(n => n.id === navTab).label
     return (
@@ -1613,9 +2023,6 @@ function App() {
           className="next-button"
           disabled={!butterflyName.trim() || !userName.trim()}
           onClick={async () => {
-            const needsMission = mission === null
-            const needsLesson = lesson === null
-
             if (currentUser) {
               // Already authenticated — save onboarding data and go straight to Home
               try {
@@ -1637,36 +2044,16 @@ function App() {
                 console.error('[Firestore] Onboarding save failed | code:', e.code, '| message:', e.message, e)
               }
               save('utgl_hadAccount', true)
-              setScreen(7)
+              if (!missionPlan) {
+                setShowPlanLoading(true)
+                setScreen(7)
+                try { await generateAndSaveMissionPlan(currentUser.uid) } finally { setShowPlanLoading(false) }
+              } else {
+                setScreen(7)
+              }
             } else {
               setScreen(6)
             }
-
-            if (!needsMission && !needsLesson) return
-            if (needsMission) setMissionLoading(true)
-            const ctx = `My situation: ${problem}. I'm working on: ${selected}.`
-            await Promise.all([
-              needsMission
-                ? callFlutter(FLUTTER_MISSION_SYSTEM, ctx)
-                    .then(reply => {
-                      const parsed = JSON.parse(reply)
-                      if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-                        setMission(parsed)
-                      }
-                    })
-                    .catch(() => {})
-                : Promise.resolve(),
-              needsLesson
-                ? callFlutter(FLUTTER_LESSON_SYSTEM, ctx)
-                    .then(reply => {
-                      const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
-                      const parsed = JSON.parse(cleaned)
-                      if (parsed.title && parsed.body) setLesson(parsed)
-                    })
-                    .catch(() => {})
-                : Promise.resolve(),
-            ])
-            if (needsMission) setMissionLoading(false)
           }}
         >
           Next →
