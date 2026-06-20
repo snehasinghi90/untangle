@@ -210,7 +210,6 @@ function App() {
   const [rightNowPeople, setRightNowPeople] = useState(0)
   const [rightNowDidIt, setRightNowDidIt] = useState(false)
   const [rightNowXpFlash, setRightNowXpFlash] = useState(false)
-  const [rightNowAlreadyDone, setRightNowAlreadyDone] = useState(false)
 
   const [moodEntries, setMoodEntries] = useState([])
   const [insightsSummary, setInsightsSummary] = useState('')
@@ -496,10 +495,8 @@ function App() {
     setRightNowDidIt(true)
 
     const showAlreadyDone = () => {
-      setRightNowAlreadyDone(true)
       setTimeout(() => {
         setShowRightNow(false)
-        setRightNowAlreadyDone(false)
         setRightNowDidIt(false)
       }, 2500)
     }
@@ -1558,15 +1555,15 @@ function App() {
               )}
 
               <div className="rn-actions">
-                {rightNowAlreadyDone ? (
-                  <p className="flutter-thinking" style={{ textAlign: 'center' }}>
-                    You already completed your mission today 🦋 Come back tomorrow!
-                  </p>
-                ) : rightNowXpFlash ? (
+                {rightNowXpFlash ? (
                   <div className="rn-xp-flash">
                     <span className="rn-xp-text">+10 XP ⚡</span>
                     <p className="flutter-thinking" style={{ textAlign: 'center' }}>🎉 You did it! So proud of you.</p>
                   </div>
+                ) : completedToday ? (
+                  <p className="flutter-thinking" style={{ textAlign: 'center' }}>
+                    You already crushed it today 🦋 Come back tomorrow for your next mission.
+                  </p>
                 ) : (
                   <>
                     <button
