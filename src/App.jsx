@@ -1381,10 +1381,12 @@ function App() {
       setReportingPostId(null)
     }
     const deletePost = async (postId) => {
+      console.log('[Delete] handler called, postId:', postId)
       try {
         await deleteDoc(doc(db, 'posts', postId))
+        console.log('[Delete] success')
       } catch (e) {
-        console.error('[Delete post] Failed:', e.message)
+        console.error('[Delete] Failed — code:', e.code, '| message:', e.message)
       }
       setDeletingPostId(null)
     }
