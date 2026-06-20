@@ -1829,3 +1829,88 @@ h1 {
 .home-crisis-link a:hover {
   text-decoration: underline;
 }
+
+/* ── Community safety features ── */
+.post-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.post-action-btn {
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: #c8c8c8;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+}
+
+.post-action-btn:hover {
+  color: #999;
+}
+
+.post-action-btn--delete {
+  color: #ddb0b0;
+}
+
+.post-action-btn--delete:hover {
+  color: #b05555;
+}
+
+.post-confirm {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f7f7f7;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.post-confirm-text {
+  font-size: 12px;
+  color: #555;
+}
+
+.post-confirm-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.post-confirm-yes {
+  padding: 4px 14px;
+  background: #378add;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.post-confirm-no {
+  padding: 4px 14px;
+  background: none;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.post-reported-msg {
+  font-size: 11px;
+  color: #aaa;
+  text-align: right;
+  margin-top: 6px;
+}
+
+.post-error {
+  font-size: 12px;
+  color: #b05555;
+  margin: 4px 0 2px;
+}

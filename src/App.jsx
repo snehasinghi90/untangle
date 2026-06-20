@@ -336,6 +336,15 @@ const getButterflyEmoji = count => {
   return '🥚'
 }
 
+const BLOCKED_WORDS = [
+  'nigger','nigga','faggot','fag','retard','kike','spic','chink','gook','wetback',
+  'tranny','cunt','whore','slut','kys','kill yourself','nazi','cracker','beaner','towelhead',
+]
+const isContentClean = (text) => {
+  const lower = text.toLowerCase()
+  return !BLOCKED_WORDS.some(w => new RegExp(`\\b${w.replace(/\s+/g,'\\\\s+')}\\b`,'i').test(lower))
+}
+
 function App() {
   const [problem, setProblem] = useState(() => load('utgl_problem', ''))
   const [screen, setScreen] = useState(() => load('utgl_screen', 1))
@@ -359,6 +368,11 @@ function App() {
   useEffect(() => { save('utgl_feeling', feeling) }, [feeling])
   useEffect(() => { save('utgl_journalEntries', journalEntries) }, [journalEntries])
   useEffect(() => { save('utgl_likedPosts', likedPosts) }, [likedPosts])
+  const [reportedPosts, setReportedPosts] = useState(() => load('utgl_reportedPosts', []))
+  const [reportingPostId, setReportingPostId] = useState(null)
+  const [deletingPostId, setDeletingPostId] = useState(null)
+  const [postError, setPostError] = useState('')
+  useEffect(() => { save('utgl_reportedPosts', reportedPosts) }, [reportedPosts])
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('timestamp', 'desc'))
@@ -1338,17 +1352,41 @@ function App() {
 
   if (screen === 7 && navTab === 'community') {
     const submitPost = async () => {
-      if (!composeDraft.trim()) return
+      const text = composeDraft.trim()
+      if (!text) return
+      if (text.length < 3 || text.length > 500 || !isContentClean(text)) {
+        setPostError("Your post couldn't be submitted. Please keep it supportive and under 500 characters.")
+        return
+      }
+      setPostError('')
       await addDoc(collection(db, 'posts'), {
         name: userName || 'Anonymous',
         category: selected || 'Something else',
-        text: composeDraft.trim(),
+        text,
         likes: 0,
         timestamp: serverTimestamp(),
         userId: auth.currentUser?.uid || 'anonymous',
       })
       setComposeDraft('')
       setShowCompose(false)
+    }
+    const submitReport = async (postId) => {
+      if (reportedPosts.includes(postId)) return
+      try {
+        await addDoc(collection(db, 'reports'), { postId, reportedAt: serverTimestamp(), reason: 'inappropriate' })
+      } catch (e) {
+        console.error('[Report] Failed:', e.message)
+      }
+      setReportedPosts(prev => [...prev, postId])
+      setReportingPostId(null)
+    }
+    const deletePost = async (postId) => {
+      try {
+        await deleteDoc(doc(db, 'posts', postId))
+      } catch (e) {
+        console.error('[Delete post] Failed:', e.message)
+      }
+      setDeletingPostId(null)
     }
     const toggleLike = async (id) => {
       const isLiked = likedPosts.includes(id)
@@ -1373,13 +1411,14 @@ function App() {
                 <textarea
                   className="journal-textarea"
                   value={composeDraft}
-                  onChange={e => setComposeDraft(e.target.value)}
+                  onChange={e => { setComposeDraft(e.target.value); if (postError) setPostError('') }}
                   placeholder="What went well? Even small wins count..."
                   rows={4}
                   autoFocus
                 />
+                {postError && <p className="post-error">{postError}</p>}
                 <div className="compose-actions">
-                  <button className="compose-cancel" onClick={() => { setShowCompose(false); setComposeDraft('') }}>Cancel</button>
+                  <button className="compose-cancel" onClick={() => { setShowCompose(false); setComposeDraft(''); setPostError('') }}>Cancel</button>
                   <button className="h-btn h-btn--blue compose-post" disabled={!composeDraft.trim()} onClick={submitPost}>Post</button>
                 </div>
               </div>
@@ -1401,6 +1440,32 @@ function App() {
                   </button>
                 </div>
                 <p className="post-text">{post.text}</p>
+                {reportingPostId === post.id ? (
+                  <div className="post-confirm">
+                    <span className="post-confirm-text">Report this post as inappropriate?</span>
+                    <div className="post-confirm-btns">
+                      <button className="post-confirm-yes" onClick={() => submitReport(post.id)}>Yes</button>
+                      <button className="post-confirm-no" onClick={() => setReportingPostId(null)}>No</button>
+                    </div>
+                  </div>
+                ) : deletingPostId === post.id ? (
+                  <div className="post-confirm">
+                    <span className="post-confirm-text">Delete this post?</span>
+                    <div className="post-confirm-btns">
+                      <button className="post-confirm-yes" onClick={() => deletePost(post.id)}>Yes</button>
+                      <button className="post-confirm-no" onClick={() => setDeletingPostId(null)}>No</button>
+                    </div>
+                  </div>
+                ) : reportedPosts.includes(post.id) ? (
+                  <p className="post-reported-msg">Thanks — we'll review this.</p>
+                ) : (
+                  <div className="post-actions">
+                    {auth.currentUser?.uid === post.userId && (
+                      <button className="post-action-btn post-action-btn--delete" onClick={() => setDeletingPostId(post.id)}>Delete</button>
+                    )}
+                    <button className="post-action-btn" onClick={() => setReportingPostId(post.id)}>Report</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
