@@ -1922,7 +1922,7 @@ h1 {
   background: #f4f6f9;
   z-index: 200;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
   overflow: hidden;
 }
 
@@ -1930,6 +1930,8 @@ h1 {
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
+  max-width: 480px;
   overflow: hidden;
 }
 
