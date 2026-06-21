@@ -519,6 +519,7 @@ function App() {
   const [lesson, setLesson] = useState(() => load('utgl_lesson', null))
   const [missionPlan, setMissionPlan] = useState(null)
   const [showPlanLoading, setShowPlanLoading] = useState(false)
+  const situationPlanAt = useRef(null)
   const [showSituationPrep, setShowSituationPrep] = useState(false)
   const [situationInput, setSituationInput] = useState('')
   const [situationLoading, setSituationLoading] = useState(false)
@@ -931,6 +932,7 @@ function App() {
       const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
       const parsed = JSON.parse(cleaned)
       setSituationPlan(parsed)
+      situationPlanAt.current = Date.now()
     } catch (e) {
       console.error('[SituationPrep] Failed:', e.message)
     }
@@ -2083,7 +2085,12 @@ function App() {
             <div className="h-card">
               <p className="h-card-label">📅 Prep for something coming up</p>
               <p className="h-card-body">Got a hard conversation ahead? Let Flutter help you prepare.</p>
-              <button className="h-btn h-btn--blue" onClick={() => { setShowSituationPrep(true); setSituationPlan(null); setSituationInput(''); setSituationSaved(false) }}>
+              <button className="h-btn h-btn--blue" onClick={() => {
+                if (situationPlanAt.current && Date.now() - situationPlanAt.current > 86400000) {
+                  setSituationPlan(null); setSituationInput(''); setSituationSaved(false)
+                }
+                setShowSituationPrep(true)
+              }}>
                 Prepare now →
               </button>
             </div>
@@ -2131,37 +2138,47 @@ function App() {
         <BottomNav />
 
         {showSituationPrep && (
-          <div className="sp-overlay">
-            <div className="sp-screen">
-              <div className="sp-header">
-                <button className="back-link" onClick={() => setShowSituationPrep(false)}>← Back</button>
-                <p className="sp-title">What's coming up?</p>
+          <div className="sp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowSituationPrep(false) }}>
+            <div className="sp-modal">
+              <div className="sp-modal-header">
+                <p className="sp-modal-title">What&apos;s coming up?</p>
+                <button className="sp-modal-close" onClick={() => setShowSituationPrep(false)}>✕</button>
               </div>
-              <div className="sp-body">
-                <div className="h-card">
-                  <textarea
-                    className="sp-input"
-                    value={situationInput}
-                    onChange={e => setSituationInput(e.target.value)}
-                    placeholder="Describe the situation... (e.g. My mom is calling tonight to ask me to babysit again)"
-                    rows={3}
-                  />
-                  <button
-                    className="h-btn h-btn--blue"
-                    onClick={handleSituationPrep}
-                    disabled={!situationInput.trim() || situationLoading}
-                  >
-                    {situationLoading ? 'Preparing…' : 'Prepare me'}
-                  </button>
-                </div>
+
+              <div className="sp-modal-body">
+                <textarea
+                  className="sp-input"
+                  value={situationInput}
+                  onChange={e => setSituationInput(e.target.value)}
+                  placeholder="Describe the situation... (e.g. My mom is calling tonight to ask me to babysit again)"
+                  rows={3}
+                />
+                {speechSupported && (
+                  <div className="voice-row" style={{ marginBottom: 8 }}>
+                    <button
+                      className={`voice-mic-btn${isRecording ? ' voice-mic-btn--recording' : ''}`}
+                      type="button"
+                      onClick={() => isRecording ? stopVoiceRecording() : startVoiceRecording(situationInput, setSituationInput)}
+                    >
+                      {isRecording ? <><span className="voice-dot" /><span className="voice-listening">Listening…</span></> : '🎙️'}
+                    </button>
+                  </div>
+                )}
+                <button
+                  className="h-btn h-btn--blue"
+                  onClick={handleSituationPrep}
+                  disabled={!situationInput.trim() || situationLoading}
+                >
+                  {situationLoading ? 'Preparing…' : 'Prepare me'}
+                </button>
 
                 {situationLoading && (
-                  <p className="flutter-thinking" style={{ textAlign: 'center', padding: '8px 0' }}>Flutter is preparing your plan…</p>
+                  <p className="flutter-thinking" style={{ textAlign: 'center', marginTop: 12 }}>Flutter is preparing your plan…</p>
                 )}
 
                 {situationPlan && (
-                  <div className="h-card sp-plan-card">
-                    <p className="h-card-label">🦋 {situationPlan.title}</p>
+                  <div className="sp-flutter-card">
+                    <p className="flutter-name">🦋 {situationPlan.title}</p>
 
                     <p className="sp-section-label">What to expect</p>
                     <p className="sp-section-text">{situationPlan.whatMightHappen}</p>
@@ -2176,17 +2193,22 @@ function App() {
 
                     <p className="sp-section-label">Afterwards</p>
                     <p className="sp-section-text">{situationPlan.afterThought}</p>
+                  </div>
+                )}
 
+                {situationPlan && (
+                  <div className="sp-plan-actions">
                     {currentUser && (
                       situationSaved
                         ? <p className="sp-saved-msg">✅ Saved to your preps</p>
-                        : <button className="h-btn h-btn--blue" style={{ marginTop: 12 }} onClick={handleSaveSituationPrep}>Save this prep</button>
+                        : <button className="h-btn h-btn--blue" onClick={handleSaveSituationPrep}>Save this prep</button>
                     )}
+                    <button className="rn-need-moment" onClick={() => setShowSituationPrep(false)}>I&apos;m ready</button>
                   </div>
                 )}
 
                 {pastPreps.length > 0 && (
-                  <div className="h-card">
+                  <div className="sp-past-preps">
                     <p className="h-card-label">Past Preps</p>
                     {pastPreps.map(prep => (
                       <div key={prep.id} className="sp-past-prep" onClick={() => setExpandedPrepId(expandedPrepId === prep.id ? null : prep.id)}>
