@@ -423,7 +423,6 @@ function App() {
   const expandingMissionRef = useRef(false)
   const recognitionRef = useRef(null)
   const voiceBaseRef = useRef('')
-  const voiceFinalRef = useRef('')
   const [speechSupported] = useState(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition))
   const [isRecording, setIsRecording] = useState(false)
   const [voiceHintSeen, setVoiceHintSeen] = useState(() => load('utgl_voiceHintSeen', false))
@@ -902,23 +901,17 @@ function App() {
   const startVoiceRecording = (currentText, setter) => {
     if (!speechSupported) return
     voiceBaseRef.current = currentText
-    voiceFinalRef.current = ''
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SR()
     rec.continuous = true
     rec.interimResults = true
     rec.lang = 'en-US'
     rec.onresult = (e) => {
-      let addedFinal = ''
-      let interim = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) addedFinal += t
-        else interim += t
+      let transcript = ''
+      for (let i = 0; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript
       }
-      voiceFinalRef.current += addedFinal
-      const newText = [voiceBaseRef.current, (voiceFinalRef.current + interim).trimStart()].filter(Boolean).join(' ')
-      setter(newText)
+      setter(voiceBaseRef.current ? voiceBaseRef.current + ' ' + transcript : transcript)
     }
     rec.onend = () => { setIsRecording(false); recognitionRef.current = null }
     rec.onerror = (e) => { console.error('[Speech]', e.error); setIsRecording(false); recognitionRef.current = null }
