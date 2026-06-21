@@ -2132,6 +2132,7 @@ function App() {
 
           </div>
 
+          <p className="home-disclaimer">Untangle is a wellness tool, not a substitute for professional mental health care.</p>
           <p className="home-crisis-link">Crisis support: <a href="tel:988">988</a></p>
 
         </div>
@@ -2457,6 +2458,7 @@ function App() {
 
         {authError && <p className="auth-error">{authError}</p>}
 
+        <p className="auth-disclaimer">Untangle is a wellness tool, not a substitute for professional mental health care.</p>
         <button
           className="next-button"
           onClick={handleEmailAuth}

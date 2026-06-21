@@ -40,7 +40,12 @@ h1 {
   font-size: 40px;
   font-weight: 700;
   margin-bottom: 8px;
-   color: #1a1a1a;
+  color: #1a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  h1 { color: #f0f0f0; }
+  .tagline { color: #aaa; }
 }
 
 .tagline {
@@ -223,7 +228,7 @@ h1 {
 .home-cards {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 20px 24px 100px;
 }
 
@@ -231,7 +236,7 @@ h1 {
   background: #ffffff;
   border: 1px solid #e8e8e8;
   border-radius: 16px;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -792,7 +797,7 @@ h1 {
 .journal-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 20px 24px 100px;
 }
 
@@ -900,7 +905,7 @@ h1 {
 .community-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 20px 24px 100px;
 }
 
@@ -1026,7 +1031,7 @@ h1 {
 .insights-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 20px 24px 100px;
 }
 
@@ -1687,15 +1692,18 @@ h1 {
 .plan-screen {
   min-height: 100vh;
   padding-bottom: 80px;
-  background: #f7f5ff;
+  background: #f4f6f9;
 }
 
 .plan-body {
-  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px 100px;
 }
 
 .plan-phase {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .plan-phase-title {
@@ -1812,6 +1820,22 @@ h1 {
   font-size: 13px;
   color: #9ca3af;
   margin-top: 6px;
+}
+
+.home-disclaimer {
+  font-size: 11px;
+  color: #bbb;
+  text-align: center;
+  padding: 4px 24px 0;
+  line-height: 1.4;
+}
+
+.auth-disclaimer {
+  font-size: 11px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.4;
+  margin-bottom: 8px;
 }
 
 .home-crisis-link {
