@@ -89,6 +89,9 @@ const FLUTTER_MISSION_PLAN_SYSTEM = 'You are Flutter. Generate a personalized 20
 
 const FLUTTER_EXPAND_MISSION_SYSTEM = 'You are Flutter. A user has a mission topic for today. Expand it into a concrete, doable mission. Return ONLY a JSON object with no markdown, no backticks, no explanation — just raw JSON in this exact format:\n{\n  "title": "Mission title 5-7 words matching the topic",\n  "steps": [\n    "Tiny concrete step 1",\n    "Tiny concrete step 2",\n    "Tiny concrete step 3",\n    "Tiny concrete step 4"\n  ]\n}\nCRITICAL: The whole mission must take 5-10 minutes maximum. Steps must be tiny and concrete. Reference the user\'s specific context directly.'
 
+const FLUTTER_SITUATION_PREP_SYSTEM = (category) =>
+  `You are Flutter. The user has a specific situation coming up that relates to their pattern of ${category}. Generate a warm, practical preparation plan. Return ONLY JSON, no markdown, no backticks:\n{\n  "title": "Short title for this situation",\n  "whatMightHappen": "2-3 sentences about what to expect emotionally and practically",\n  "yourStrengths": "1-2 sentences reminding them what they have been working on that applies here",\n  "script": "Exact words they can say — keep it natural and short, one or two sentences max",\n  "afterThought": "1 sentence of encouragement for after it happens"\n}`
+
 const FALLBACK_PLANS = {
   'People-pleasing': { phases: [
     { id: 1, title: 'Phase 1: Foundation', missions: [
@@ -510,6 +513,13 @@ function App() {
   const [lesson, setLesson] = useState(() => load('utgl_lesson', null))
   const [missionPlan, setMissionPlan] = useState(null)
   const [showPlanLoading, setShowPlanLoading] = useState(false)
+  const [showSituationPrep, setShowSituationPrep] = useState(false)
+  const [situationInput, setSituationInput] = useState('')
+  const [situationLoading, setSituationLoading] = useState(false)
+  const [situationPlan, setSituationPlan] = useState(null)
+  const [situationSaved, setSituationSaved] = useState(false)
+  const [pastPreps, setPastPreps] = useState([])
+  const [expandedPrepId, setExpandedPrepId] = useState(null)
   const [editingMissionId, setEditingMissionId] = useState(null)
   const [editDraft, setEditDraft] = useState('')
 
@@ -873,6 +883,46 @@ function App() {
       setMissionLoading(false)
     }
   }
+
+  const handleSituationPrep = async () => {
+    if (!situationInput.trim()) return
+    setSituationLoading(true)
+    setSituationPlan(null)
+    setSituationSaved(false)
+    const userMsg = `Upcoming situation: ${situationInput.trim()}. My pattern: ${selected || 'personal growth'}. My concern from onboarding: ${problem || 'working on personal growth'}.`
+    try {
+      const reply = await callFlutter(FLUTTER_SITUATION_PREP_SYSTEM(selected || 'personal growth'), userMsg)
+      const cleaned = reply.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+      const parsed = JSON.parse(cleaned)
+      setSituationPlan(parsed)
+    } catch (e) {
+      console.error('[SituationPrep] Failed:', e.message)
+    }
+    setSituationLoading(false)
+  }
+
+  const handleSaveSituationPrep = async () => {
+    if (!situationPlan || !currentUser?.uid) return
+    try {
+      await addDoc(collection(db, 'situations', currentUser.uid, 'preps'), {
+        situation: situationInput.trim(),
+        plan: situationPlan,
+        timestamp: serverTimestamp(),
+      })
+      setSituationSaved(true)
+      const snap = await getDocs(query(collection(db, 'situations', currentUser.uid, 'preps'), orderBy('timestamp', 'desc')))
+      setPastPreps(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    } catch (e) {
+      console.error('[SituationPrep] Save failed:', e.message)
+    }
+  }
+
+  useEffect(() => {
+    if (!showSituationPrep || !currentUser?.uid) return
+    getDocs(query(collection(db, 'situations', currentUser.uid, 'preps'), orderBy('timestamp', 'desc')))
+      .then(snap => setPastPreps(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(e => console.error('[SituationPrep] Fetch failed:', e.message))
+  }, [showSituationPrep, currentUser?.uid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGoogleAuth = async () => {
     setAuthError('')
@@ -1978,6 +2028,14 @@ function App() {
               )}
             </div>
 
+            <div className="h-card">
+              <p className="h-card-label">📅 Prep for something coming up</p>
+              <p className="h-card-body">Got a hard conversation ahead? Let Flutter help you prepare.</p>
+              <button className="h-btn h-btn--blue" onClick={() => { setShowSituationPrep(true); setSituationPlan(null); setSituationInput(''); setSituationSaved(false) }}>
+                Prepare now →
+              </button>
+            </div>
+
             <button
               className="stuck-card"
               onClick={() => setNavTab('insights')}
@@ -2019,6 +2077,93 @@ function App() {
 
         </div>
         <BottomNav />
+
+        {showSituationPrep && (
+          <div className="sp-overlay">
+            <div className="sp-screen">
+              <div className="sp-header">
+                <button className="back-link" onClick={() => setShowSituationPrep(false)}>← Back</button>
+                <p className="sp-title">What's coming up?</p>
+              </div>
+              <div className="sp-body">
+                <div className="h-card">
+                  <textarea
+                    className="sp-input"
+                    value={situationInput}
+                    onChange={e => setSituationInput(e.target.value)}
+                    placeholder="Describe the situation... (e.g. My mom is calling tonight to ask me to babysit again)"
+                    rows={3}
+                  />
+                  <button
+                    className="h-btn h-btn--blue"
+                    onClick={handleSituationPrep}
+                    disabled={!situationInput.trim() || situationLoading}
+                  >
+                    {situationLoading ? 'Preparing…' : 'Prepare me'}
+                  </button>
+                </div>
+
+                {situationLoading && (
+                  <p className="flutter-thinking" style={{ textAlign: 'center', padding: '8px 0' }}>Flutter is preparing your plan…</p>
+                )}
+
+                {situationPlan && (
+                  <div className="h-card sp-plan-card">
+                    <p className="h-card-label">🦋 {situationPlan.title}</p>
+
+                    <p className="sp-section-label">What to expect</p>
+                    <p className="sp-section-text">{situationPlan.whatMightHappen}</p>
+
+                    <p className="sp-section-label">What you&apos;ve got</p>
+                    <p className="sp-section-text">{situationPlan.yourStrengths}</p>
+
+                    <p className="sp-section-label">What to say</p>
+                    <div className="sp-script-block">
+                      <p className="sp-script-text">&ldquo;{situationPlan.script}&rdquo;</p>
+                    </div>
+
+                    <p className="sp-section-label">Afterwards</p>
+                    <p className="sp-section-text">{situationPlan.afterThought}</p>
+
+                    {currentUser && (
+                      situationSaved
+                        ? <p className="sp-saved-msg">✅ Saved to your preps</p>
+                        : <button className="h-btn h-btn--blue" style={{ marginTop: 12 }} onClick={handleSaveSituationPrep}>Save this prep</button>
+                    )}
+                  </div>
+                )}
+
+                {pastPreps.length > 0 && (
+                  <div className="h-card">
+                    <p className="h-card-label">Past Preps</p>
+                    {pastPreps.map(prep => (
+                      <div key={prep.id} className="sp-past-prep" onClick={() => setExpandedPrepId(expandedPrepId === prep.id ? null : prep.id)}>
+                        <div className="sp-past-prep-header">
+                          <span className="sp-past-prep-title">{prep.plan?.title || prep.situation}</span>
+                          <span className="sp-past-prep-chevron">{expandedPrepId === prep.id ? '▲' : '▼'}</span>
+                        </div>
+                        {expandedPrepId === prep.id && prep.plan && (
+                          <div className="sp-past-prep-body">
+                            <p className="sp-section-label">What to expect</p>
+                            <p className="sp-section-text">{prep.plan.whatMightHappen}</p>
+                            <p className="sp-section-label">What you&apos;ve got</p>
+                            <p className="sp-section-text">{prep.plan.yourStrengths}</p>
+                            <p className="sp-section-label">What to say</p>
+                            <div className="sp-script-block">
+                              <p className="sp-script-text">&ldquo;{prep.plan.script}&rdquo;</p>
+                            </div>
+                            <p className="sp-section-label">Afterwards</p>
+                            <p className="sp-section-text">{prep.plan.afterThought}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {showRightNow && (
           <div className="rn-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowRightNow(false) }}>

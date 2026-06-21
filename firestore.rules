@@ -33,5 +33,9 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow read: if false;
     }
+
+    match /situations/{uid}/preps/{prepId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }
