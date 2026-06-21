@@ -468,7 +468,7 @@ function App() {
         query(collection(db, 'journals', user.uid, 'entries'), orderBy('timestamp', 'desc'))
       )
       setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setMoodCheckedIn(load('utgl_moodCheckedInDate', '') === getTodayStr())
+      setMoodCheckedIn(load(`utgl_moodCheckedInDate_${user.uid}`, '') === getTodayStr())
       setScreen(7)
     } else {
       setScreen(2)
@@ -529,8 +529,11 @@ function App() {
 
     if (currentUser?.uid) {
       getDocs(query(collection(db, 'moods', currentUser.uid, 'entries'), orderBy('timestamp', 'asc')))
-        .then(snap => setMoodEntries(snap.docs.map(d => d.data())))
-        .catch(e => console.error('[Firestore] Mood entries fetch failed | code:', e.code, '| message:', e.message, e))
+        .then(snap => {
+          console.log('[Mood fetch] uid:', currentUser.uid, '| entries:', snap.size)
+          setMoodEntries(snap.docs.map(d => d.data()))
+        })
+        .catch(e => console.error('[Mood fetch] Failed | uid:', currentUser.uid, '| code:', e.code, '| message:', e.message))
     }
 
     if (!insightsSummaryFetchedRef.current && journalEntries.length >= 3) {
@@ -649,6 +652,9 @@ function App() {
     setLastCompletedDate('')
     setXp(0)
     setCompletedDates([])
+    setMoodCheckedIn(false)
+    setMoodEntries([])
+    insightsSummaryFetchedRef.current = false
     setJournalEntries(PLACEHOLDER_ENTRIES)
     setOnboardingAiReply('')
     setShowProfile(false)
@@ -693,7 +699,7 @@ function App() {
     const history = load('utgl_moodHistory', [])
     const updated = [...history, { date: todayStr, value: feeling }].slice(-90)
     save('utgl_moodHistory', updated)
-    save('utgl_moodCheckedInDate', todayStr)
+    save(`utgl_moodCheckedInDate_${currentUser?.uid || 'anon'}`, todayStr)
     setMoodCheckedIn(true)
     if (currentUser) {
       addDoc(collection(db, 'moods', currentUser.uid, 'entries'), {
@@ -903,6 +909,7 @@ function App() {
         }
         if (planSnap.exists()) setMissionPlan(planSnap.data())
         setJournalEntries(journalSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        setMoodCheckedIn(load(`utgl_moodCheckedInDate_${user.uid}`, '') === getTodayStr())
         save('utgl_hadAccount', true)
         setScreen(7)
       } else {
@@ -932,6 +939,7 @@ function App() {
           console.error('[Firestore] setDoc failed for uid:', user.uid, '| code:', fsErr.code, '| message:', fsErr.message, fsErr)
           throw fsErr
         }
+        setMoodCheckedIn(false)
         save('utgl_hadAccount', true)
         setShowPlanLoading(true)
         setScreen(7)
@@ -998,6 +1006,7 @@ function App() {
           console.error('[Firestore] setDoc failed for uid:', result.user.uid, '| code:', fsErr.code, '| message:', fsErr.message, fsErr)
           throw fsErr
         }
+        setMoodCheckedIn(false)
         save('utgl_hadAccount', true)
         setShowPlanLoading(true)
         setScreen(7)
