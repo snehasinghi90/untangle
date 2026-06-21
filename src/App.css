@@ -2052,3 +2052,55 @@ h1 {
   display: flex;
   flex-direction: column;
 }
+
+/* ── Voice input ── */
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+
+.voice-mic-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+  color: #555;
+  transition: border-color 0.15s;
+}
+
+.voice-mic-btn--recording {
+  border-color: #e53e3e;
+  color: #e53e3e;
+}
+
+.voice-dot {
+  width: 8px;
+  height: 8px;
+  background: #e53e3e;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+.voice-listening {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.voice-hint {
+  font-size: 12px;
+  color: #b0b0b0;
+}

@@ -421,6 +421,12 @@ function App() {
   const [insightsSummaryLoading, setInsightsSummaryLoading] = useState(false)
   const insightsSummaryFetchedRef = useRef(false)
   const expandingMissionRef = useRef(false)
+  const recognitionRef = useRef(null)
+  const voiceBaseRef = useRef('')
+  const voiceFinalRef = useRef('')
+  const [speechSupported] = useState(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition))
+  const [isRecording, setIsRecording] = useState(false)
+  const [voiceHintSeen, setVoiceHintSeen] = useState(() => load('utgl_voiceHintSeen', false))
 
   const [authLoading, setAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
@@ -432,6 +438,7 @@ function App() {
   const [showEmailSignIn, setShowEmailSignIn] = useState(false)
   const authInitialized = useRef(false)
 
+  useEffect(() => { save('utgl_voiceHintSeen', voiceHintSeen) }, [voiceHintSeen])
   useEffect(() => { save('utgl_missionsCompleted', missionsCompleted) }, [missionsCompleted])
   useEffect(() => { save('utgl_streak', streak) }, [streak])
   useEffect(() => { save('utgl_lastCompletedDate', lastCompletedDate) }, [lastCompletedDate])
@@ -882,6 +889,42 @@ function App() {
     } finally {
       setMissionLoading(false)
     }
+  }
+
+  const stopVoiceRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      recognitionRef.current = null
+    }
+    setIsRecording(false)
+  }
+
+  const startVoiceRecording = (currentText, setter) => {
+    if (!speechSupported) return
+    voiceBaseRef.current = currentText
+    voiceFinalRef.current = ''
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const rec = new SR()
+    rec.continuous = true
+    rec.interimResults = true
+    rec.lang = 'en-US'
+    rec.onresult = (e) => {
+      let addedFinal = ''
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) addedFinal += t
+        else interim += t
+      }
+      voiceFinalRef.current += addedFinal
+      const newText = [voiceBaseRef.current, (voiceFinalRef.current + interim).trimStart()].filter(Boolean).join(' ')
+      setter(newText)
+    }
+    rec.onend = () => { setIsRecording(false); recognitionRef.current = null }
+    rec.onerror = (e) => { console.error('[Speech]', e.error); setIsRecording(false); recognitionRef.current = null }
+    recognitionRef.current = rec
+    rec.start()
+    setIsRecording(true)
   }
 
   const handleSituationPrep = async () => {
@@ -1345,6 +1388,22 @@ function App() {
                 placeholder="Write freely — no one else will see this..."
                 rows={5}
               />
+              {speechSupported && (
+                <div className="voice-row">
+                  <button
+                    className={`voice-mic-btn${isRecording ? ' voice-mic-btn--recording' : ''}`}
+                    type="button"
+                    onClick={() => {
+                      if (isRecording) { stopVoiceRecording() } else { if (!voiceHintSeen) setVoiceHintSeen(true); startVoiceRecording(journalDraft, setJournalDraft) }
+                    }}
+                  >
+                    {isRecording ? <><span className="voice-dot" /><span className="voice-listening">Listening…</span></> : '🎙️'}
+                  </button>
+                  {!isRecording && !voiceHintSeen && (
+                    <span className="voice-hint">Tap mic to speak your entry</span>
+                  )}
+                </div>
+              )}
               <button
                 className="h-btn h-btn--blue"
                 disabled={!journalDraft.trim()}
@@ -2419,6 +2478,17 @@ function App() {
           placeholder="I can't say no to people, even when I'm exhausted..."
           rows="4"
         />
+        {speechSupported && (
+          <div className="voice-row">
+            <button
+              className={`voice-mic-btn${isRecording ? ' voice-mic-btn--recording' : ''}`}
+              type="button"
+              onClick={() => isRecording ? stopVoiceRecording() : startVoiceRecording(problem, setProblem)}
+            >
+              {isRecording ? <><span className="voice-dot" /><span className="voice-listening">Listening…</span></> : '🎙️'}
+            </button>
+          </div>
+        )}
         <button className="next-button" onClick={handleOnboardingNext}>
           Next →
         </button>
