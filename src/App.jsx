@@ -1919,7 +1919,6 @@ function App() {
             <div className="home-header-top">
               <span className="home-name">Hi, {userName}! {butterflyEmoji}</span>
               <div className="home-header-right">
-                <span className="home-day-badge">Day 1</span>
                 <button className="profile-icon" onClick={() => setShowProfile(true)}>👤</button>
               </div>
             </div>
